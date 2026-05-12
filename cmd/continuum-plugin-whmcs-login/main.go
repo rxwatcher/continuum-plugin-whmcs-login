@@ -1,7 +1,7 @@
 // Command continuum-plugin-whmcs-login serves the WHMCS auth provider plugin
 // over hashicorp/go-plugin. main wires the SDK runtime + http_routes + auth
-// provider capabilities and exposes a /api/v1/health stub. Later phases mount
-// the admin SPA.
+// provider capabilities and composes the admin HTTP surface from
+// internal/admin. Later phases mount the admin SPA.
 package main
 
 import (
@@ -12,6 +12,7 @@ import (
 	"os"
 	goruntime "runtime"
 	"sync/atomic"
+	"time"
 
 	"github.com/hashicorp/go-hclog"
 
@@ -19,14 +20,20 @@ import (
 	publicmanifest "github.com/ContinuumApp/continuum-plugin-sdk/pkg/pluginsdk/manifest"
 	sdkruntime "github.com/ContinuumApp/continuum-plugin-sdk/pkg/pluginsdk/runtime"
 
+	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/admin"
 	pluginauth "github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/auth"
 	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/httproutes"
 	pluginrt "github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/runtime"
 	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/server"
+	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/whmcs"
 )
 
 //go:embed manifest.json
 var manifestRaw []byte
+
+// productCacheTTL is the lifetime of cached responses from
+// /api/v1/admin/products. Admins can force a refresh via the SPA.
+const productCacheTTL = 5 * time.Minute
 
 func main() {
 	logger := hclog.New(&hclog.LoggerOptions{Name: "continuum-plugin-whmcs-login"})
@@ -39,9 +46,8 @@ func main() {
 
 	httpSrv := httproutes.NewServer()
 
-	// cfgPtr holds the latest Config so capability handlers (AuthServer, the
-	// admin HTTP server in later phases) can pick up Configure-driven
-	// changes without holding their own copies.
+	// cfgPtr holds the latest Config so AuthServer + AdminServer see new
+	// values immediately on Configure without rebuilding the gRPC plumbing.
 	var cfgPtr atomic.Pointer[pluginrt.Config]
 	cfgFn := func() pluginrt.Config {
 		if p := cfgPtr.Load(); p != nil {
@@ -53,12 +59,25 @@ func main() {
 	authSrv := pluginauth.NewServer(cfgFn)
 
 	rt := pluginrt.New(manifest, func(cfg pluginrt.Config) error {
-		// Store snapshot first so subsequent in-flight RPCs see the new
-		// values, then rewire the HTTP handler.
 		cfgPtr.Store(&cfg)
-		srv := server.New(server.Deps{})
+
+		// Build a fresh product cache if admin API creds are present.
+		// A nil cache makes the /products endpoint return 503 with a clear
+		// message, which is what we want before the admin sets the creds.
+		var prodCache *whmcs.ProductCache
+		if cfg.WHMCSAdminAPIID != "" && cfg.WHMCSAdminAPISecret != "" {
+			apiClient := whmcs.NewAPIClient(cfg.WHMCSServerURL, cfg.WHMCSAdminAPIID, cfg.WHMCSAdminAPISecret)
+			prodCache = whmcs.NewProductCache(apiClient, productCacheTTL)
+		}
+
+		adminSrv := admin.NewServer(admin.Deps{
+			ConfigFn:     cfgFn,
+			ProductCache: prodCache,
+		})
+
+		srv := server.New(server.Deps{Admin: adminSrv})
 		httpSrv.SetHandler(srv.Handler())
-		logger.Info("configured", "whmcs_server_url", cfg.WHMCSServerURL)
+		logger.Info("configured", "whmcs_server_url", cfg.WHMCSServerURL, "admin_api_configured", prodCache != nil)
 		return nil
 	})
 

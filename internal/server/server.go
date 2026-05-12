@@ -1,6 +1,11 @@
 // Package server constructs the chi-based HTTP handler exposed by the
-// plugin's http_routes.v1 capability. Phase 7 wires only the /api/v1/health
-// stub; later phases compose in the admin API and SPA.
+// plugin's http_routes.v1 capability. It wires:
+//
+//	GET  /api/v1/health           public  (status check)
+//	GET  /api/v1/admin/whoami     authenticated  (returns role headers)
+//	*    /api/v1/admin/*          admin-only  (handled by internal/admin)
+//	GET  /assets/*                public  (logo + SPA bundle)
+//	GET  /admin and /admin/*      authenticated  (SPA HTML; theme-injected)
 package server
 
 import (
@@ -9,17 +14,17 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/admin"
 )
 
-// Deps holds the dependencies this package needs from main.go. Fields are
-// optional — nil means "not yet configured", which lets us mount partial
-// surfaces without crashing the plugin before Configure runs.
+// Deps holds the dependencies this package needs from main.go. All fields are
+// optional — nil means "not yet wired", which keeps the router safe to call
+// before Configure runs.
 type Deps struct {
-	// Filled in by later phases (Phase 10 mounts AdminHandler; Phase 14
-	// mounts the SPA assets/HTML).
-	AdminHandler http.Handler
-	AssetsFS     http.FileSystem
-	SPAHandler   http.HandlerFunc
+	Admin      *admin.Server
+	AssetsFS   http.FileSystem
+	SPAHandler http.HandlerFunc
 }
 
 type Server struct {
@@ -28,20 +33,23 @@ type Server struct {
 
 func New(d Deps) *Server { return &Server{deps: d} }
 
-// Handler builds the chi router. Routes:
-//
-//	GET  /api/v1/health           public  (status check)
-//	*    /api/v1/admin/*          authenticated, role-gated per-route
-//	GET  /assets/*                public  (logo + SPA bundle assets the SPA loads pre-auth)
-//	GET  /admin and /admin/*      authenticated (SPA HTML)
+// Handler returns the composed chi router.
 func (s *Server) Handler() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 
 	r.Get("/api/v1/health", s.handleHealth)
 
-	if s.deps.AdminHandler != nil {
-		r.Mount("/api/v1/admin", s.deps.AdminHandler)
+	if s.deps.Admin != nil {
+		// /whoami is intentionally NOT gated on admin — the SPA needs it to
+		// render a friendly "admin required" notice for regular users.
+		r.Get("/api/v1/admin/whoami", s.deps.Admin.HandleWhoami)
+		r.Group(func(r chi.Router) {
+			r.Use(s.deps.Admin.RequireAdmin)
+			r.Get("/api/v1/admin/products", s.deps.Admin.HandleProducts)
+			r.Post("/api/v1/admin/products/refresh", s.deps.Admin.HandleProductsRefresh)
+			r.Get("/api/v1/admin/config-summary", s.deps.Admin.HandleConfigSummary)
+		})
 	}
 
 	if s.deps.AssetsFS != nil {
