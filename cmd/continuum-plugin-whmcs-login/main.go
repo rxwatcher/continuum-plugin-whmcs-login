@@ -1,7 +1,7 @@
 // Command continuum-plugin-whmcs-login serves the WHMCS auth provider plugin
-// over hashicorp/go-plugin. main wires the SDK runtime + http_routes capability
-// and exposes a /api/v1/health stub. Future phases mount the auth_provider
-// server and the admin SPA.
+// over hashicorp/go-plugin. main wires the SDK runtime + http_routes + auth
+// provider capabilities and exposes a /api/v1/health stub. Later phases mount
+// the admin SPA.
 package main
 
 import (
@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	goruntime "runtime"
+	"sync/atomic"
 
 	"github.com/hashicorp/go-hclog"
 
@@ -18,6 +19,7 @@ import (
 	publicmanifest "github.com/ContinuumApp/continuum-plugin-sdk/pkg/pluginsdk/manifest"
 	sdkruntime "github.com/ContinuumApp/continuum-plugin-sdk/pkg/pluginsdk/runtime"
 
+	pluginauth "github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/auth"
 	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/httproutes"
 	pluginrt "github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/runtime"
 	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/server"
@@ -37,7 +39,23 @@ func main() {
 
 	httpSrv := httproutes.NewServer()
 
+	// cfgPtr holds the latest Config so capability handlers (AuthServer, the
+	// admin HTTP server in later phases) can pick up Configure-driven
+	// changes without holding their own copies.
+	var cfgPtr atomic.Pointer[pluginrt.Config]
+	cfgFn := func() pluginrt.Config {
+		if p := cfgPtr.Load(); p != nil {
+			return *p
+		}
+		return pluginrt.Config{}
+	}
+
+	authSrv := pluginauth.NewServer(cfgFn)
+
 	rt := pluginrt.New(manifest, func(cfg pluginrt.Config) error {
+		// Store snapshot first so subsequent in-flight RPCs see the new
+		// values, then rewire the HTTP handler.
+		cfgPtr.Store(&cfg)
 		srv := server.New(server.Deps{})
 		httpSrv.SetHandler(srv.Handler())
 		logger.Info("configured", "whmcs_server_url", cfg.WHMCSServerURL)
@@ -47,8 +65,9 @@ func main() {
 	sdkruntime.Serve(sdkruntime.ServeConfig{
 		Logger: logger,
 		Servers: sdkruntime.CapabilityServers{
-			Runtime:    rt,
-			HttpRoutes: httpSrv,
+			Runtime:      rt,
+			HttpRoutes:   httpSrv,
+			AuthProvider: authSrv,
 		},
 	})
 }
