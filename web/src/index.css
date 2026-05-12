@@ -1,0 +1,1904 @@
+@import "tailwindcss";
+
+/* ================================================================
+   § 1  THEME BRIDGE — Tailwind ↔ CSS Custom Properties
+   ================================================================
+   Maps semantic CSS variables (set per-theme below) into
+   Tailwind's @theme system so they work as utility classes.
+   e.g.  bg-background, text-foreground, border-border, etc.
+   ================================================================ */
+
+@theme inline {
+  /* ── Surfaces ────────────────────────────────────────────── */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-raised: var(--surface-raised);
+
+  /* ── Interactive ─────────────────────────────────────────── */
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  /* ── Status ────────────────────────────────────────────────── */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+
+  /* ── Borders & Focus ─────────────────────────────────────── */
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* ── Charts ──────────────────────────────────────────────── */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* ── Sidebar ─────────────────────────────────────────────── */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-section-divider: var(--sidebar-section-divider);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* ── Border Radius ───────────────────────────────────────── */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-pill: 9999px;
+
+  /* ── Shadows (dark-UI optimized) ─────────────────────────── */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.25);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.5);
+
+  /* ── Animations ──────────────────────────────────────────── */
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+  --animate-fade-in: fade-in 0.3s ease-out;
+  --animate-slide-up: slide-up 0.3s ease-out;
+  --animate-scale-in: scale-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  --animate-ken-burns-a: ken-burns-a 14s linear infinite;
+  --animate-ken-burns-b: ken-burns-b 18s linear infinite;
+
+  /* ── Motion: Duration ──────────────────────────────────────── */
+  --duration-instant: 0ms;
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+  --duration-glacial: 700ms;
+  --duration-cinematic: 1200ms;
+  --duration-drift: 2000ms;
+
+  /* ── Motion: Easing ────────────────────────────────────────── */
+  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-gentle: cubic-bezier(0.25, 0, 0.35, 1);
+
+  /* ── Font Family ───────────────────────────────────────────── */
+  --font-family-display: var(--font-display, var(--font-body));
+
+  /* ── Hero Backdrop Defaults ─────────────────────────────────── */
+  --hero-backdrop-brightness: 0.75;
+  --hero-backdrop-saturate: 0.9;
+  --hero-text-shadow: 0 18px 50px rgb(0 0 0 / 45%);
+}
+
+/* ================================================================
+   § 2  KEYFRAMES
+   ================================================================ */
+
+@keyframes accordion-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes pulse-opacity {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes ken-burns-a {
+  0% {
+    transform: scale(1) translate(0, 0);
+  }
+  50% {
+    transform: scale(1.06) translate(-0.5%, -0.3%);
+  }
+  100% {
+    transform: scale(1) translate(0, 0);
+  }
+}
+@keyframes ken-burns-b {
+  0% {
+    transform: scale(1.04) translate(0.3%, 0);
+  }
+  50% {
+    transform: scale(1) translate(-0.3%, 0.2%);
+  }
+  100% {
+    transform: scale(1.04) translate(0.3%, 0);
+  }
+}
+
+/* Soft radiating halo used behind the centered play button while paused —
+   communicates "tap to resume" without distracting during playback.      */
+@keyframes player-breathe {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgb(255 255 255 / 0.22),
+      0 20px 60px -18px rgb(0 0 0 / 0.7),
+      inset 0 1px 0 rgb(255 255 255 / 0.7);
+  }
+  60% {
+    box-shadow:
+      0 0 0 18px rgb(255 255 255 / 0),
+      0 20px 60px -18px rgb(0 0 0 / 0.7),
+      inset 0 1px 0 rgb(255 255 255 / 0.7);
+  }
+}
+
+/* Cinematic reveal for the floating control cluster — fades in slightly
+   below its resting position when controls become visible. Pairs with the
+   opacity transition applied via Tailwind utilities.                      */
+@keyframes player-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ================================================================
+   VIEW TRANSITIONS — Page navigation animations
+   ================================================================
+   Uses the View Transitions API for smooth cross-fades between
+   route changes. The browser captures old/new page snapshots
+   and animates between them.
+   ================================================================ */
+
+::view-transition-old(main-content) {
+  animation: 200ms cubic-bezier(0, 0, 0.2, 1) both fade-out;
+}
+
+::view-transition-new(main-content) {
+  animation: 300ms cubic-bezier(0, 0, 0.2, 1) both slide-up;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(main-content),
+  ::view-transition-new(main-content) {
+    animation: none;
+  }
+  :root {
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+    --duration-cinematic: 0ms;
+    --duration-drift: 0ms;
+    --duration-glacial: 0ms;
+    --duration-slow: 150ms;
+    --animate-ken-burns-a: none;
+    --animate-ken-burns-b: none;
+  }
+  .ambient-glow {
+    transition: none;
+  }
+  .sidebar-transition,
+  .main-transition {
+    transition: none;
+  }
+  .player-breathe,
+  .player-rise {
+    animation: none !important;
+  }
+}
+
+@media (forced-colors: active) {
+  * {
+    forced-color-adjust: auto;
+  }
+}
+
+/* ================================================================
+   § 3  THEME DEFINITIONS
+   ================================================================
+   Each theme sets ALL semantic tokens. Themes are activated via
+   the data-theme attribute on <html>.
+
+   Token naming conventions:
+     --background       Page background (darkest main surface)
+     --foreground       Primary text color
+     --surface          Default card/panel surface
+     --surface-hover    Surface on hover
+     --surface-raised   Elevated surface (modals, floating panels)
+     --card             Card background (usually = surface)
+     --primary          Primary accent/action color
+     --secondary        Secondary element backgrounds
+     --muted            Muted backgrounds
+     --accent           Active/highlighted element backgrounds
+     --destructive      Danger/error color
+     --border           Default border color
+     --sidebar          Sidebar background (often darkest surface)
+   ================================================================ */
+
+@layer base {
+  /* ── Global Status Tokens ──────────────────────────────────
+     Semantic status colors used across all themes. Individual
+     themes may override these if needed.
+     ───────────────────────────────────────────────────────── */
+  :root {
+    --success: oklch(0.75 0.18 145);
+    --success-foreground: oklch(0.98 0.01 145);
+    --warning: oklch(0.8 0.15 85);
+    --warning-foreground: oklch(0.98 0.01 85);
+    --info: oklch(0.7 0.15 250);
+    --info-foreground: oklch(0.98 0.01 250);
+  }
+
+  /* ── Midnight Cinema ────────────────────────────────────── */
+  /* Inspired by premium streaming UIs: monochromatic, cinematic,
+     content-focused. White primary creates an elegant, theater-like
+     atmosphere where media artwork is the star.                    */
+  [data-theme="midnight-cinema"] {
+    --radius: 0.75rem;
+    --font-body: "Outfit", sans-serif;
+    --font-display: "Outfit", sans-serif;
+
+    /* Surfaces: near-black with subtle cool undertone */
+    --background: #141417;
+    --foreground: #e8e8ec;
+    --card: #1c1c20;
+    --card-foreground: #e8e8ec;
+    --popover: #18181c;
+    --popover-foreground: #e8e8ec;
+
+    /* Primary: white — for play buttons, key CTAs, active indicators */
+    --primary: #e8e8ec;
+    --primary-foreground: #141417;
+
+    /* Secondary & Muted: subtle surface variations */
+    --secondary: #232328;
+    --secondary-foreground: #d0d0d6;
+    --muted: #1c1c20;
+    --muted-foreground: #6e6e78;
+    --accent: #232328;
+    --accent-foreground: #e8e8ec;
+
+    /* Destructive: warm red for danger actions */
+    --destructive: #ef4444;
+    --destructive-foreground: #ffffff;
+
+    /* Borders: barely visible, just enough structure */
+    --border: #28282e;
+    --input: #1c1c20;
+    --ring: #e8e8ec;
+
+    /* Charts: desaturated pastels that fit the cinema aesthetic */
+    --chart-1: #8b9cf7;
+    --chart-2: #7ec8e3;
+    --chart-3: #81c995;
+    --chart-4: #e8a87c;
+    --chart-5: #c78dbd;
+
+    /* Sidebar: darkest surface, creating depth */
+    --sidebar: #0f0f12;
+    --sidebar-foreground: #e8e8ec;
+    --sidebar-primary: #e8e8ec;
+    --sidebar-primary-foreground: #0f0f12;
+    --sidebar-accent: #1c1c20;
+    --sidebar-accent-foreground: #e8e8ec;
+    --sidebar-border: #232328;
+    --sidebar-section-divider: #2e2e35;
+    --sidebar-ring: #e8e8ec;
+
+    /* Surfaces: layered depth */
+    --surface: #1c1c20;
+    --surface-hover: #232328;
+    --surface-raised: #28282e;
+    --ambient: #e8e8ec;
+    --ambient-glow-opacity: 0.08;
+  }
+
+  [data-theme="cinema-light"] {
+    --radius: 0.75rem;
+    --font-body: "Outfit", sans-serif;
+    --font-display: "Outfit", sans-serif;
+
+    /* Surfaces: warm off-white with cool undertone */
+    --background: #f4f4f6;
+    --foreground: #1a1a1e;
+    --card: #ffffff;
+    --card-foreground: #1a1a1e;
+    --popover: #ffffff;
+    --popover-foreground: #1a1a1e;
+
+    /* Primary: near-black — inverted from Cinema Dark */
+    --primary: #1a1a1e;
+    --primary-foreground: #f4f4f6;
+
+    /* Secondary & Muted: subtle surface variations */
+    --secondary: #e8e8ec;
+    --secondary-foreground: #3a3a42;
+    --muted: #ebebef;
+    --muted-foreground: #78787f;
+    --accent: #e8e8ec;
+    --accent-foreground: #1a1a1e;
+
+    /* Destructive: warm red for danger actions */
+    --destructive: #dc2626;
+    --destructive-foreground: #ffffff;
+
+    /* Borders: soft gray, enough structure without weight */
+    --border: #d8d8de;
+    --input: #e8e8ec;
+    --ring: #1a1a1e;
+
+    /* Charts: richer tones for light backgrounds */
+    --chart-1: #6366f1;
+    --chart-2: #0ea5e9;
+    --chart-3: #22c55e;
+    --chart-4: #f59e0b;
+    --chart-5: #a855f7;
+
+    /* Sidebar: slightly darker than background for depth */
+    --sidebar: #eaeaee;
+    --sidebar-foreground: #1a1a1e;
+    --sidebar-primary: #1a1a1e;
+    --sidebar-primary-foreground: #f4f4f6;
+    --sidebar-accent: #dfdfe5;
+    --sidebar-accent-foreground: #1a1a1e;
+    --sidebar-border: #d0d0d8;
+    --sidebar-section-divider: #c2c2cc;
+    --sidebar-ring: #1a1a1e;
+
+    /* Surfaces: layered depth */
+    --surface: #ebebef;
+    --surface-hover: #e0e0e6;
+    --surface-raised: #ffffff;
+    --ambient: #1a1a1e;
+    --ambient-glow-opacity: 0.05;
+
+    /* Hero: light-mode overrides */
+    --hero-backdrop-brightness: 1.15;
+    --hero-backdrop-saturate: 0.6;
+    --hero-text-shadow: 0 1px 3px rgb(255 255 255 / 60%);
+  }
+
+  [data-theme="cobalt-studio"] {
+    --radius: 0.75rem;
+    --font-body: "Outfit", sans-serif;
+    --font-display: "Outfit", sans-serif;
+    --background: #101722;
+    --foreground: #f4f8ff;
+    --card: #151e2b;
+    --card-foreground: #f4f8ff;
+    --popover: #121a25;
+    --popover-foreground: #f4f8ff;
+    --primary: #78aefc;
+    --primary-foreground: #0f1722;
+    --secondary: #1b2634;
+    --secondary-foreground: #d7e2f1;
+    --muted: #151e2b;
+    --muted-foreground: #90a0b5;
+    --accent: #203043;
+    --accent-foreground: #f4f8ff;
+    --destructive: #ef6b73;
+    --destructive-foreground: #ffffff;
+    --border: #28384d;
+    --input: #182231;
+    --ring: #78aefc;
+    --chart-1: #78aefc;
+    --chart-2: #87d2ff;
+    --chart-3: #6ec7ba;
+    --chart-4: #b9c7ff;
+    --chart-5: #f18d8d;
+    --sidebar: #0c131d;
+    --sidebar-foreground: #f4f8ff;
+    --sidebar-primary: #78aefc;
+    --sidebar-primary-foreground: #0f1722;
+    --sidebar-accent: #172231;
+    --sidebar-accent-foreground: #f4f8ff;
+    --sidebar-border: #1f2a39;
+    --sidebar-section-divider: #283a4e;
+    --sidebar-ring: #78aefc;
+    --surface: #151e2b;
+    --surface-hover: #1d2a3b;
+    --surface-raised: #223245;
+    --ambient: #78aefc;
+    --ambient-glow-opacity: 0.11;
+  }
+
+  [data-theme="oxblood-noir"] {
+    --radius: 0.75rem;
+    --font-body: "Outfit", sans-serif;
+    --font-display: "Outfit", sans-serif;
+    --background: #171113;
+    --foreground: #f8f2f3;
+    --card: #20181b;
+    --card-foreground: #f8f2f3;
+    --popover: #1b1417;
+    --popover-foreground: #f8f2f3;
+    --primary: #d16a78;
+    --primary-foreground: #180f12;
+    --secondary: #281d21;
+    --secondary-foreground: #decfd2;
+    --muted: #20181b;
+    --muted-foreground: #a28e95;
+    --accent: #322228;
+    --accent-foreground: #f8f2f3;
+    --destructive: #f08080;
+    --destructive-foreground: #ffffff;
+    --border: #3b2830;
+    --input: #251a1f;
+    --ring: #d16a78;
+    --chart-1: #d16a78;
+    --chart-2: #f08e7a;
+    --chart-3: #c8a0b8;
+    --chart-4: #8aa0c6;
+    --chart-5: #e1b86e;
+    --sidebar: #120d0f;
+    --sidebar-foreground: #f8f2f3;
+    --sidebar-primary: #d16a78;
+    --sidebar-primary-foreground: #180f12;
+    --sidebar-accent: #21161a;
+    --sidebar-accent-foreground: #f8f2f3;
+    --sidebar-border: #2c1d23;
+    --sidebar-section-divider: #3a252e;
+    --sidebar-ring: #d16a78;
+    --surface: #20181b;
+    --surface-hover: #2a2025;
+    --surface-raised: #34262c;
+    --ambient: #d16a78;
+    --ambient-glow-opacity: 0.11;
+  }
+
+  [data-theme="evergreen-studio"] {
+    --radius: 0.75rem;
+    --font-body: "Outfit", sans-serif;
+    --font-display: "Outfit", sans-serif;
+    --background: #101715;
+    --foreground: #f2f8f5;
+    --card: #16201d;
+    --card-foreground: #f2f8f5;
+    --popover: #131b19;
+    --popover-foreground: #f2f8f5;
+    --primary: #5bc39d;
+    --primary-foreground: #0d1513;
+    --secondary: #1b2824;
+    --secondary-foreground: #d1e0d9;
+    --muted: #16201d;
+    --muted-foreground: #91a39c;
+    --accent: #20322d;
+    --accent-foreground: #f2f8f5;
+    --destructive: #f07a7a;
+    --destructive-foreground: #ffffff;
+    --border: #284038;
+    --input: #182420;
+    --ring: #5bc39d;
+    --chart-1: #5bc39d;
+    --chart-2: #7dd8bd;
+    --chart-3: #7eb7a4;
+    --chart-4: #88a9cf;
+    --chart-5: #e0b66b;
+    --sidebar: #0c1210;
+    --sidebar-foreground: #f2f8f5;
+    --sidebar-primary: #5bc39d;
+    --sidebar-primary-foreground: #0d1513;
+    --sidebar-accent: #16221e;
+    --sidebar-accent-foreground: #f2f8f5;
+    --sidebar-border: #1d2f2a;
+    --sidebar-section-divider: #253d35;
+    --sidebar-ring: #5bc39d;
+    --surface: #16201d;
+    --surface-hover: #1e2b27;
+    --surface-raised: #263732;
+    --ambient: #5bc39d;
+    --ambient-glow-opacity: 0.1;
+  }
+}
+
+/* ================================================================
+   § 4  BASE STYLES
+   ================================================================ */
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html {
+    font-size: 16px;
+    font-weight: 400;
+    --ui-text-scale-factor: 1;
+  }
+  html[data-text-scale="large"] {
+    font-size: 18px;
+    --ui-text-scale-factor: 1.12;
+  }
+  html[data-text-scale="x-large"] {
+    font-size: 20px;
+    --ui-text-scale-factor: 1.24;
+  }
+  html[data-text-weight="strong"] {
+    --font-weight-ui: 520;
+    --font-weight-medium-ui: 600;
+    --font-weight-semibold-ui: 700;
+    --font-weight-bold-ui: 800;
+  }
+  html[data-text-weight="default"] {
+    --font-weight-ui: 400;
+    --font-weight-medium-ui: 500;
+    --font-weight-semibold-ui: 600;
+    --font-weight-bold-ui: 700;
+  }
+  html[data-high-contrast="true"] {
+    --foreground: #ffffff;
+    --ring: oklch(0.95 0 0);
+    --muted-foreground: color-mix(in srgb, white 72%, var(--muted-foreground));
+    --border: color-mix(in srgb, white 34%, var(--border));
+    --input: color-mix(in srgb, white 16%, var(--input));
+    --surface: color-mix(in srgb, white 10%, var(--surface));
+    --surface-hover: color-mix(in srgb, white 16%, var(--surface-hover));
+    --surface-raised: color-mix(in srgb, white 20%, var(--surface-raised));
+    --accent: color-mix(in srgb, white 14%, var(--accent));
+    --ambient-glow-opacity: 0.04;
+  }
+  html[data-high-contrast="true"] .surface-panel-subtle,
+  html[data-high-contrast="true"] .surface-panel,
+  html[data-high-contrast="true"] .glass,
+  html[data-high-contrast="true"] .glass-subtle {
+    border-color: color-mix(in srgb, var(--border) 88%, white 12%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.08),
+      0 12px 36px -24px rgb(0 0 0 / 0.75);
+  }
+  html[data-high-contrast="true"] .text-muted-foreground {
+    color: var(--muted-foreground) !important;
+  }
+  html[data-high-contrast="true"] .border-border,
+  html[data-high-contrast="true"] .border-border\/50,
+  html[data-high-contrast="true"] .border-border\/60,
+  html[data-high-contrast="true"] .border-border\/70,
+  html[data-high-contrast="true"] .border-border\/80 {
+    border-color: var(--border) !important;
+  }
+  html[data-text-weight="strong"] .font-medium {
+    font-weight: var(--font-weight-medium-ui, 600) !important;
+  }
+  html[data-text-weight="strong"] .font-semibold {
+    font-weight: var(--font-weight-semibold-ui, 700) !important;
+  }
+  html[data-text-weight="strong"] .font-bold {
+    font-weight: var(--font-weight-bold-ui, 800) !important;
+  }
+  html[data-text-scale="large"] .text-\[8px\],
+  html[data-text-scale="x-large"] .text-\[8px\] {
+    font-size: calc(8px * var(--ui-text-scale-factor)) !important;
+  }
+  html[data-text-scale="large"] .text-\[9px\],
+  html[data-text-scale="x-large"] .text-\[9px\] {
+    font-size: calc(9px * var(--ui-text-scale-factor)) !important;
+  }
+  html[data-text-scale="large"] .text-\[10px\],
+  html[data-text-scale="x-large"] .text-\[10px\] {
+    font-size: calc(10px * var(--ui-text-scale-factor)) !important;
+  }
+  html[data-text-scale="large"] .text-\[11px\],
+  html[data-text-scale="x-large"] .text-\[11px\] {
+    font-size: calc(11px * var(--ui-text-scale-factor)) !important;
+  }
+  html[data-text-scale="large"] .text-\[12px\],
+  html[data-text-scale="x-large"] .text-\[12px\] {
+    font-size: calc(12px * var(--ui-text-scale-factor)) !important;
+  }
+  html[data-text-scale="large"] .text-\[13px\],
+  html[data-text-scale="x-large"] .text-\[13px\] {
+    font-size: calc(13px * var(--ui-text-scale-factor)) !important;
+  }
+  html[data-text-scale="large"] .text-\[14px\],
+  html[data-text-scale="x-large"] .text-\[14px\] {
+    font-size: calc(14px * var(--ui-text-scale-factor)) !important;
+  }
+  html[data-text-scale="large"] .text-\[15px\],
+  html[data-text-scale="x-large"] .text-\[15px\] {
+    font-size: calc(15px * var(--ui-text-scale-factor)) !important;
+  }
+  html[data-text-scale="large"] .text-\[17px\],
+  html[data-text-scale="x-large"] .text-\[17px\] {
+    font-size: calc(17px * var(--ui-text-scale-factor)) !important;
+  }
+  html[data-text-scale="large"] .text-\[20px\],
+  html[data-text-scale="x-large"] .text-\[20px\] {
+    font-size: calc(20px * var(--ui-text-scale-factor)) !important;
+  }
+  html[data-text-scale="large"] .text-\[28px\],
+  html[data-text-scale="x-large"] .text-\[28px\] {
+    font-size: calc(28px * var(--ui-text-scale-factor)) !important;
+  }
+  html[data-text-scale="large"] .text-\[32px\],
+  html[data-text-scale="x-large"] .text-\[32px\] {
+    font-size: calc(32px * var(--ui-text-scale-factor)) !important;
+  }
+  html[data-text-scale="large"] .text-\[38px\],
+  html[data-text-scale="x-large"] .text-\[38px\] {
+    font-size: calc(38px * var(--ui-text-scale-factor)) !important;
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-body);
+    font-weight: var(--font-weight-ui, 400);
+    background-image:
+      radial-gradient(
+        circle at top,
+        color-mix(in srgb, var(--ambient) 10%, transparent),
+        transparent 32%
+      ),
+      linear-gradient(
+        to bottom,
+        color-mix(in srgb, var(--background) 92%, transparent),
+        var(--background)
+      );
+    min-height: 100dvh;
+  }
+}
+
+/* ================================================================
+   § 5  COMPONENT UTILITY CLASSES
+   ================================================================
+   Reusable patterns extracted from the design system.
+   See ../docs/design-system.md for pattern documentation.
+   ================================================================ */
+
+@layer components {
+  /* ── Hero Gradient ───────────────────────────────────────── */
+  /* Place over a hero/backdrop image to create a cinematic
+     bottom-to-top gradient fade into the page background.
+     Usage:
+       <div class="relative">
+         <img ... />
+         <div class="hero-gradient" />
+         <div class="hero-gradient-radial" />  // optional vignette
+       </div>                                                    */
+  .hero-gradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to top,
+      var(--background) 0%,
+      color-mix(in srgb, var(--background) 92%, transparent) 20%,
+      color-mix(in srgb, var(--background) 55%, transparent) 50%,
+      color-mix(in srgb, var(--background) 20%, transparent) 75%,
+      transparent 100%
+    );
+    pointer-events: none;
+  }
+
+  .hero-gradient-radial {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+      ellipse at center,
+      transparent 0%,
+      color-mix(in srgb, var(--background) 30%, transparent) 70%,
+      var(--background) 100%
+    );
+    pointer-events: none;
+  }
+
+  /* Side gradient — fades from left edge for sidebar overlap */
+  .hero-gradient-left {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to right,
+      var(--background) 0%,
+      color-mix(in srgb, var(--background) 80%, transparent) 20%,
+      color-mix(in srgb, var(--background) 40%, transparent) 40%,
+      transparent 60%
+    );
+    pointer-events: none;
+  }
+
+  .hero-vignette {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--background) 92%, transparent) 0%,
+        color-mix(in srgb, var(--background) 64%, transparent) 28%,
+        transparent 58%
+      ),
+      linear-gradient(
+        to top,
+        var(--background) 0%,
+        color-mix(in srgb, var(--background) 75%, transparent) 28%,
+        transparent 62%
+      );
+    pointer-events: none;
+  }
+
+  /* Stronger bottom fade for edge-to-edge marquee heroes. The hero
+     should melt into the page background rather than stop against a
+     border — background reaches full opacity by ~35% up the frame.   */
+  .hero-gradient-strong {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to top,
+      var(--background) 0%,
+      var(--background) 12%,
+      color-mix(in srgb, var(--background) 88%, transparent) 30%,
+      color-mix(in srgb, var(--background) 55%, transparent) 55%,
+      color-mix(in srgb, var(--background) 18%, transparent) 80%,
+      transparent 100%
+    );
+    pointer-events: none;
+  }
+
+  /* Top scrim for the overlay marquee header — keeps eyebrow / tabs
+     legible over bright backdrops without a hard bar.                */
+  .hero-top-scrim {
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 180px;
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--background) 70%, transparent) 0%,
+      color-mix(in srgb, var(--background) 30%, transparent) 55%,
+      transparent 100%
+    );
+    pointer-events: none;
+  }
+
+  /* ── Ambient Glow ──────────────────────────────────────────── */
+  /* Radial gradient overlay tinted by --ambient color. Applied to
+     hero sections for atmospheric color bleed from featured content.
+     Usage: <div class="ambient-glow" />  (sibling to hero-gradient) */
+  .ambient-glow {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+      ellipse at 50% 80%,
+      var(--ambient, var(--primary)) 0%,
+      transparent 70%
+    );
+    opacity: var(--ambient-glow-opacity, 0.12);
+    pointer-events: none;
+    transition:
+      background var(--duration-cinematic) var(--ease-gentle),
+      opacity var(--duration-cinematic) var(--ease-gentle);
+  }
+
+  /* ── Sidebar Immersion Transitions ─────────────────────────── */
+  .sidebar-transition {
+    transition: width var(--duration-normal) var(--ease-default);
+    overflow: hidden;
+  }
+  .main-transition {
+    transition: margin-left var(--duration-normal) var(--ease-default);
+  }
+
+  /* ── Sidebar Scrollbar ────────────────────────────────────── */
+  /* Thin, auto-hiding scrollbar that blends with the sidebar.  */
+  .sidebar-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color 0.2s ease;
+  }
+  .sidebar-scroll:hover {
+    scrollbar-color: color-mix(in srgb, var(--sidebar-foreground) 20%, transparent) transparent;
+  }
+  /* WebKit (Chrome, Safari, Edge) */
+  .sidebar-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  .sidebar-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .sidebar-scroll::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 3px;
+    transition: background 0.2s ease;
+  }
+  .sidebar-scroll:hover::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--sidebar-foreground) 20%, transparent);
+  }
+  .sidebar-scroll:hover::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--sidebar-foreground) 35%, transparent);
+  }
+
+  /* ── Overlay Scrollbar ─────────────────────────────────── */
+  /* Thin, subtle scrollbar for dialogs and overlay panels.   */
+  .overlay-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--foreground) 15%, transparent) transparent;
+  }
+  .overlay-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  .overlay-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .overlay-scroll::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--foreground) 15%, transparent);
+    border-radius: 3px;
+  }
+  .overlay-scroll::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--foreground) 30%, transparent);
+  }
+
+  /* ── Glass Surfaces ──────────────────────────────────────── */
+  /* Frosted glass effect for floating controls, overlay panels.
+     Usage: <div class="glass">...</div>                        */
+  .glass {
+    background: color-mix(in srgb, var(--surface) 70%, transparent);
+    backdrop-filter: blur(20px) saturate(1.2);
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
+    border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.06),
+      0 20px 50px -28px rgb(0 0 0 / 0.65);
+  }
+
+  .glass-subtle {
+    background: color-mix(in srgb, var(--surface) 40%, transparent);
+    backdrop-filter: blur(12px) saturate(1.1);
+    -webkit-backdrop-filter: blur(12px) saturate(1.1);
+    border: 1px solid color-mix(in srgb, var(--border) 30%, transparent);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+  }
+
+  /* ── Terminal Surface ──────────────────────────────────────── */
+  /* Scoped terminal aesthetic for ffmpeg console and similar.
+     Usage: <div class="terminal-surface">...</div>              */
+  .terminal-surface {
+    --terminal-bg: oklch(0.15 0.01 260);
+    --terminal-fg: oklch(0.85 0.15 155);
+    --terminal-muted: oklch(0.65 0.1 155);
+    --terminal-border: oklch(0.3 0.05 155);
+  }
+
+  .glass-dark {
+    background: color-mix(in srgb, var(--background) 80%, transparent);
+    backdrop-filter: blur(24px) saturate(1.3);
+    -webkit-backdrop-filter: blur(24px) saturate(1.3);
+    border: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.04),
+      0 24px 60px -30px rgb(0 0 0 / 0.72);
+  }
+
+  /* ── Video Player — Cinema Glass ─────────────────────────────
+     Bespoke surfaces for the floating player HUD. Lives on a
+     black void (always on top of a video) so tokens here are
+     hard-coded monochrome — independent of the app's theme.     */
+
+  /* Primary play/pause disc — sits at the center of the frame. */
+  .player-disc-primary {
+    background: linear-gradient(180deg, #ffffff 0%, #f3f3f5 100%);
+    color: #0a0a0b;
+    box-shadow:
+      0 20px 60px -18px rgb(0 0 0 / 0.7),
+      inset 0 1px 0 rgb(255 255 255 / 0.7);
+    transition:
+      transform var(--duration-fast) var(--ease-spring),
+      box-shadow var(--duration-normal) var(--ease-default),
+      background var(--duration-fast) var(--ease-default);
+  }
+  .player-disc-primary:hover {
+    transform: scale(1.04);
+  }
+  .player-disc-primary:active {
+    transform: scale(0.97);
+  }
+
+  /* Secondary floating control (skip ±, prev/next episode). A
+     barely-there glass disc that gains opacity on hover so the
+     frame stays clear during playback.                          */
+  .player-disc-secondary {
+    background: rgb(255 255 255 / 0.06);
+    color: rgb(255 255 255 / 0.92);
+    border: 1px solid rgb(255 255 255 / 0.1);
+    backdrop-filter: blur(14px) saturate(1.1);
+    -webkit-backdrop-filter: blur(14px) saturate(1.1);
+    box-shadow:
+      0 10px 30px -14px rgb(0 0 0 / 0.6),
+      inset 0 1px 0 rgb(255 255 255 / 0.08);
+    transition:
+      background var(--duration-fast) var(--ease-default),
+      transform var(--duration-fast) var(--ease-spring),
+      border-color var(--duration-fast) var(--ease-default);
+  }
+  .player-disc-secondary:hover {
+    background: rgb(255 255 255 / 0.14);
+    border-color: rgb(255 255 255 / 0.22);
+    transform: scale(1.06);
+  }
+  .player-disc-secondary:active {
+    transform: scale(0.95);
+  }
+
+  /* Breathing halo behind the primary disc when paused. */
+  .player-disc-primary[data-paused="true"] {
+    animation: player-breathe 2.6s ease-in-out infinite;
+  }
+
+  /* Bottom HUD rail — title/time on the left, utilities on the right. */
+  .player-hud {
+    background: linear-gradient(
+      to top,
+      rgb(0 0 0 / 0.82) 0%,
+      rgb(0 0 0 / 0.56) 55%,
+      rgb(0 0 0 / 0) 100%
+    );
+  }
+
+  /* Full-frame vignette for control legibility without washing out
+     the picture. Two stacked gradients: a soft top scrim for the
+     exit/title chrome and a stronger bottom scrim for the HUD.    */
+  .player-scrim {
+    background:
+      linear-gradient(to bottom, rgb(0 0 0 / 0.55) 0%, rgb(0 0 0 / 0.18) 14%, rgb(0 0 0 / 0) 28%),
+      radial-gradient(ellipse 70% 50% at 50% 50%, rgb(0 0 0 / 0.18), transparent 70%);
+  }
+
+  /* Floating cluster entrance animation — fades in with a gentle rise
+     when the controls reveal themselves.                             */
+  .player-rise {
+    animation: player-rise var(--duration-normal) var(--ease-gentle);
+  }
+
+  /* Subtle utility-icon button used in the bottom HUD rail. Relies on
+     opacity to recede during playback; a thin active underline signals
+     which secondary control is currently on.                          */
+  .player-utility-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 9999px;
+    color: rgb(255 255 255 / 0.78);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition:
+      color var(--duration-fast) var(--ease-default),
+      background-color var(--duration-fast) var(--ease-default);
+  }
+  .player-utility-btn:hover {
+    color: #fff;
+    background: rgb(255 255 255 / 0.08);
+  }
+  .player-utility-btn:focus-visible {
+    outline: 2px solid rgb(255 255 255 / 0.7);
+    outline-offset: 2px;
+  }
+  .player-utility-btn[data-active="true"] {
+    color: #fff;
+  }
+  .player-utility-btn[data-active="true"]::after {
+    content: "";
+    position: absolute;
+    bottom: 0.22rem;
+    left: 50%;
+    width: 0.28rem;
+    height: 0.28rem;
+    border-radius: 9999px;
+    background: #e8b86e; /* warm projector-lamp amber */
+    transform: translateX(-50%);
+    box-shadow: 0 0 8px rgb(232 184 110 / 0.7);
+  }
+
+  /* Vertical divider between title cluster and utility rail. */
+  .player-hud-divider {
+    width: 1px;
+    align-self: stretch;
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(255 255 255 / 0.14) 20%,
+      rgb(255 255 255 / 0.14) 80%,
+      transparent
+    );
+    margin-inline: 0.25rem;
+  }
+
+  /* Range-input thumb for the subtitle appearance panel's opacity slider.
+     Mirrors the seek bar's hover thumb so form controls feel native to the
+     player chrome rather than browser-default.                              */
+  .player-subtitle-opacity-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 9999px;
+    background: #ffffff;
+    border: none;
+    box-shadow:
+      0 2px 8px rgb(0 0 0 / 0.5),
+      inset 0 0 0 1px rgb(0 0 0 / 0.12);
+    cursor: pointer;
+  }
+  .player-subtitle-opacity-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 9999px;
+    background: #ffffff;
+    border: none;
+    box-shadow:
+      0 2px 8px rgb(0 0 0 / 0.5),
+      inset 0 0 0 1px rgb(0 0 0 / 0.12);
+    cursor: pointer;
+  }
+
+  /* ── Media Card ──────────────────────────────────────────── */
+  /* Hover effect for poster/backdrop cards.
+     Scale is applied to the image inside the overflow-hidden
+     .media-card-image container so it stays visually contained
+     and doesn't overlap adjacent carousels.
+     Usage: <div class="media-card">
+              <div class="media-card-image"><img … /></div>
+              <div>Title</div>
+            </div>                                              */
+  .media-card {
+    transition:
+      transform var(--duration-normal) var(--ease-gentle),
+      filter var(--duration-fast) var(--ease-default);
+  }
+  .media-card:hover {
+    filter: brightness(1.1);
+    transform: translateY(-4px);
+  }
+
+  /* Card image container with consistent rounded corners */
+  .media-card-image {
+    overflow: hidden;
+    border-radius: var(--radius-xl);
+    background-color: var(--surface);
+    border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.05),
+      0 24px 40px -26px rgb(0 0 0 / 0.8);
+  }
+  .media-card-image img {
+    transition:
+      transform var(--duration-normal) var(--ease-gentle),
+      opacity var(--duration-normal) var(--ease-default);
+  }
+  .media-card:hover .media-card-image img {
+    transform: scale(1.06);
+  }
+
+  /* ── Episode Row ─────────────────────────────────────────── */
+  /* Horizontal episode list item with hover highlight.
+     Usage: <div class="episode-row">
+              <img ... />
+              <div>E1 Title ...</div>
+            </div>                                              */
+  .episode-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    transition: background-color var(--duration-fast) var(--ease-default);
+    cursor: pointer;
+  }
+  .episode-row:hover {
+    background-color: var(--surface-hover);
+  }
+  .episode-row:last-child {
+    border-bottom: none;
+  }
+
+  /* ── Metadata Badge ──────────────────────────────────────── */
+  /* Small inline badge for metadata (year, rating, duration).
+     Usage: <span class="metadata-badge">PG-13</span>          */
+  .metadata-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.6rem;
+    border-radius: 9999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    background-color: color-mix(in srgb, var(--foreground) 8%, transparent);
+    color: color-mix(in srgb, var(--foreground) 72%, var(--muted-foreground));
+    border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  /* ── Pill Button ─────────────────────────────────────────── */
+  /* Fully-rounded button shape for primary actions.
+     Usage: <button class="pill">▶ Play</button>                */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.78rem 1.4rem;
+    border-radius: 9999px;
+    font-size: 0.84rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    transition: all var(--duration-fast) var(--ease-default);
+  }
+  .pill-primary {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+    box-shadow: 0 16px 36px -20px color-mix(in srgb, var(--primary) 60%, transparent);
+  }
+  .pill-primary:hover {
+    filter: brightness(0.96);
+    transform: translateY(-1px);
+  }
+  .pill-secondary {
+    background-color: var(--secondary);
+    color: var(--secondary-foreground);
+  }
+  .pill-secondary:hover {
+    background-color: var(--surface-hover);
+  }
+  .pill-glass {
+    background: color-mix(in srgb, var(--foreground) 12%, transparent);
+    color: var(--foreground);
+    border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .pill-glass:hover {
+    background: color-mix(in srgb, var(--foreground) 18%, transparent);
+  }
+
+  /* ── Action Circle ───────────────────────────────────────── */
+  /* Circular icon button for secondary actions (shuffle, download, etc).
+     Usage: <button class="action-circle"><Icon /></button>     */
+  .action-circle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 9999px;
+    background-color: color-mix(in srgb, var(--foreground) 10%, transparent);
+    color: var(--foreground);
+    transition: background-color var(--duration-fast) var(--ease-default);
+    cursor: pointer;
+    border: none;
+  }
+  .action-circle:hover {
+    background-color: color-mix(in srgb, var(--foreground) 18%, transparent);
+  }
+
+  /* ── Tab Bar ─────────────────────────────────────────────── */
+  /* Pill-style tab navigation (Recommended | Browse | etc).
+     Usage: <div class="tab-bar">
+              <button class="tab-item tab-active">Browse</button>
+              <button class="tab-item">Collections</button>
+            </div>                                              */
+  .tab-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: var(--radius-lg);
+  }
+  .tab-item {
+    padding: 0.375rem 1rem;
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--muted-foreground);
+    transition: all var(--duration-fast) var(--ease-default);
+    cursor: pointer;
+    background: transparent;
+    border: none;
+  }
+  .tab-item:hover {
+    color: var(--foreground);
+    background-color: var(--surface-hover);
+  }
+  .tab-active {
+    color: var(--foreground);
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+  }
+
+  /* ── Carousel Dots ───────────────────────────────────────── */
+  /* Indicator dots for hero carousels.
+     Usage: <div class="carousel-dots">
+              <button class="dot dot-active" />
+              <button class="dot" />
+            </div>                                              */
+  .carousel-dots {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+  }
+  .dot {
+    width: 0.42rem;
+    height: 0.42rem;
+    border-radius: 9999px;
+    background-color: color-mix(in srgb, var(--foreground) 26%, transparent);
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: all var(--duration-normal) var(--ease-default);
+  }
+  .dot-active {
+    width: 1.5rem;
+    background-color: var(--primary);
+  }
+
+  /* ── Library Marquee Header ───────────────────────────────── */
+  /* Shared sticky header for the Library page. Sits transparently
+     over the hero on the Recommended tab, and switches to a glass
+     surface on scroll or when no hero backdrop is behind it.        */
+  .library-marquee-header {
+    /* Mobile: non-sticky so the tabs scroll with the hero instead of hovering
+       over it — stacking a sticky tab bar under the sticky top nav eats too
+       much vertical space on narrow viewports. At lg+ the mobile top nav is
+       hidden, so we promote this header to sticky at top:0 there. */
+    position: relative;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    /* On mobile the eyebrow is hidden, so the tab pill bar is the only child —
+       center it. sm+ overrides back to space-between once the eyebrow shows. */
+    justify-content: center;
+    gap: 1.5rem;
+    padding: 0.9rem 1rem;
+    border-bottom: 1px solid transparent;
+    background: color-mix(in srgb, var(--background) 82%, transparent);
+    backdrop-filter: blur(18px) saturate(1.15);
+    -webkit-backdrop-filter: blur(18px) saturate(1.15);
+    border-bottom-color: color-mix(in srgb, var(--border) 55%, transparent);
+    transition:
+      background var(--duration-normal) var(--ease-default),
+      backdrop-filter var(--duration-normal) var(--ease-default),
+      border-color var(--duration-normal) var(--ease-default);
+  }
+  @media (min-width: 1024px) {
+    .library-marquee-header {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+    }
+  }
+  .library-marquee-header.is-overlay {
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-bottom-color: transparent;
+  }
+  .library-marquee-header.is-overlay[data-scrolled="true"] {
+    background: color-mix(in srgb, var(--background) 72%, transparent);
+    backdrop-filter: blur(18px) saturate(1.15);
+    -webkit-backdrop-filter: blur(18px) saturate(1.15);
+    border-bottom-color: color-mix(in srgb, var(--border) 50%, transparent);
+  }
+  @media (min-width: 640px) {
+    .library-marquee-header {
+      justify-content: space-between;
+      padding: 1rem 1.5rem;
+    }
+  }
+  @media (min-width: 1024px) {
+    .library-marquee-header {
+      padding: 1.1rem 2.5rem;
+    }
+  }
+  @media (min-width: 1280px) {
+    .library-marquee-header {
+      padding: 1.1rem 3rem;
+    }
+  }
+
+  /* Small-caps tracked eyebrow label used above hero content
+     and in the marquee header as the page identifier.              */
+  .hero-eyebrow {
+    font-family: var(--font-body);
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--foreground) 62%, transparent);
+    white-space: nowrap;
+  }
+  .hero-eyebrow .hero-eyebrow-divider {
+    display: inline-block;
+    margin: 0 0.55em;
+    opacity: 0.45;
+  }
+  .hero-eyebrow .hero-eyebrow-strong {
+    color: color-mix(in srgb, var(--foreground) 92%, transparent);
+  }
+  .is-overlay .hero-eyebrow {
+    color: color-mix(in srgb, #fff 70%, transparent);
+    text-shadow: 0 2px 12px rgb(0 0 0 / 0.5);
+  }
+  .is-overlay .hero-eyebrow .hero-eyebrow-strong {
+    color: #fff;
+  }
+
+  /* Middot-separated metadata track for hero content. Replaces
+     chip-style badges with editorial cover-copy feel.              */
+  .hero-meta-track {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 0.1rem;
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: color-mix(in srgb, var(--foreground) 78%, transparent);
+  }
+  .hero-meta-track > span {
+    display: inline-block;
+  }
+  .hero-meta-track > span + span::before {
+    content: "·";
+    display: inline-block;
+    margin: 0 0.6rem;
+    opacity: 0.55;
+    color: color-mix(in srgb, var(--foreground) 55%, transparent);
+  }
+
+  /* Editorial slide indicator (counter + rail).                   */
+  .hero-slide-counter {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    color: color-mix(in srgb, #fff 68%, transparent);
+    text-shadow: 0 2px 10px rgb(0 0 0 / 0.45);
+  }
+  .hero-slide-counter .num {
+    color: #fff;
+  }
+  .hero-slide-counter .sep {
+    width: 2.5rem;
+    height: 1px;
+    background: color-mix(in srgb, #fff 35%, transparent);
+  }
+  .hero-progress-rail {
+    position: relative;
+    width: 9rem;
+    height: 2px;
+    background: color-mix(in srgb, #fff 18%, transparent);
+    overflow: hidden;
+    border-radius: 9999px;
+  }
+  .hero-progress-rail > span {
+    position: absolute;
+    inset: 0;
+    background: color-mix(in srgb, #fff 88%, transparent);
+    transform-origin: left center;
+    transform: scaleX(0);
+    animation: hero-progress 8s linear forwards;
+  }
+  .hero-progress-rail[data-paused="true"] > span {
+    animation-play-state: paused;
+  }
+  @keyframes hero-progress {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero-progress-rail > span {
+      animation: none;
+      transform: scaleX(1);
+    }
+  }
+
+  /* Pill-style tab bar used inside the marquee header.            */
+  .marquee-tab-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.25rem;
+    border-radius: 9999px;
+    background: color-mix(in srgb, #fff 8%, transparent);
+    border: 1px solid color-mix(in srgb, #fff 10%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .library-marquee-header:not(.is-overlay) .marquee-tab-bar {
+    background: color-mix(in srgb, var(--foreground) 6%, transparent);
+    border-color: color-mix(in srgb, var(--border) 60%, transparent);
+  }
+  .marquee-tab-trigger {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    border-radius: 9999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: color-mix(in srgb, var(--foreground) 62%, transparent);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color var(--duration-fast) var(--ease-default);
+  }
+  .library-marquee-header.is-overlay .marquee-tab-trigger {
+    color: color-mix(in srgb, #fff 68%, transparent);
+  }
+  .marquee-tab-trigger:hover {
+    color: var(--foreground);
+  }
+  .library-marquee-header.is-overlay .marquee-tab-trigger:hover {
+    color: #fff;
+  }
+  .marquee-tab-trigger[data-state="active"] {
+    color: var(--foreground);
+    background: color-mix(in srgb, var(--foreground) 12%, transparent);
+  }
+  .library-marquee-header.is-overlay .marquee-tab-trigger[data-state="active"] {
+    color: #0a0a0b;
+    background: color-mix(in srgb, #fff 92%, transparent);
+  }
+  .marquee-tab-trigger:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  .panel-border {
+    border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.04),
+      0 18px 45px -30px rgb(0 0 0 / 0.55);
+  }
+
+  .page-shell {
+    width: 100%;
+    max-width: 1400px;
+    margin-inline: auto;
+    padding-inline: 1rem;
+  }
+
+  .page-shell-wide {
+    width: 100%;
+    max-width: 1520px;
+    margin-inline: auto;
+    padding-inline: 1rem;
+  }
+
+  @media (min-width: 640px) {
+    .page-shell,
+    .page-shell-wide {
+      padding-inline: 1.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .page-shell,
+    .page-shell-wide {
+      padding-inline: 2.5rem;
+    }
+  }
+
+  @media (min-width: 1280px) {
+    .page-shell-wide {
+      padding-inline: 3rem;
+    }
+  }
+
+  .page-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .page-title {
+    font-size: clamp(2rem, 4vw, 3.75rem);
+    line-height: 0.95;
+    font-weight: 800;
+    letter-spacing: -0.05em;
+  }
+
+  .page-subtitle {
+    max-width: 60ch;
+    color: color-mix(in srgb, var(--foreground) 68%, var(--muted-foreground));
+    line-height: 1.7;
+  }
+
+  .surface-panel {
+    background: color-mix(in srgb, var(--surface) 90%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+    border-radius: calc(var(--radius-2xl) + 0.35rem);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.04),
+      0 24px 50px -34px rgb(0 0 0 / 0.65);
+  }
+
+  .surface-panel-subtle {
+    background: color-mix(in srgb, var(--surface) 72%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border) 62%, transparent);
+    border-radius: calc(var(--radius-xl) + 0.25rem);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  }
+
+  /* ── Scan Queue Accent ──────────────────────────────────── */
+  /* Animated gradient sweep across the top of the scan queue
+     to signal live activity. Only visible when scans are active. */
+  .scan-queue-accent {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      color-mix(in srgb, var(--primary) 50%, transparent) 45%,
+      var(--primary) 50%,
+      color-mix(in srgb, var(--primary) 50%, transparent) 55%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: scan-accent-sweep 4s ease-in-out infinite;
+    opacity: 0.6;
+  }
+  @keyframes scan-accent-sweep {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+
+  .auth-shell {
+    min-height: 100dvh;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+  }
+
+  .auth-shell::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(
+        circle at 18% 18%,
+        color-mix(in srgb, var(--primary) 18%, transparent),
+        transparent 28%
+      ),
+      radial-gradient(
+        circle at 82% 12%,
+        color-mix(in srgb, var(--ambient) 15%, transparent),
+        transparent 26%
+      ),
+      linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--background) 96%, transparent),
+        var(--background)
+      );
+    pointer-events: none;
+  }
+
+  .auth-card {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 28rem;
+    border-radius: 2rem;
+    padding: 1.75rem;
+  }
+
+  .admin-shell {
+    width: 100%;
+    max-width: 1560px;
+    margin-inline: auto;
+  }
+
+  /* ── Section Header ──────────────────────────────────────── */
+  /* Consistent section heading with optional icon.
+     Usage: <div class="section-header">
+              <PlayCircle /> Continue Watching
+            </div>                                              */
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--foreground);
+    padding-bottom: 0.75rem;
+  }
+
+  /* ── Live Badge ──────────────────────────────────────────── */
+  .live-badge {
+    margin-left: auto;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    background: rgba(255, 60, 60, 0.12);
+    color: #f87171;
+    border: 1px solid rgba(255, 60, 60, 0.2);
+    animation: pulse-opacity 2s ease-in-out infinite;
+  }
+
+  /* ── Progress Bar ────────────────────────────────────────── */
+  /* Thin progress indicator for watch progress on cards/heroes.
+     Usage: <div class="progress-bar">
+              <div class="progress-fill" style="width: 65%" />
+            </div>                                              */
+  .progress-bar {
+    width: 100%;
+    height: 3px;
+    background-color: color-mix(in srgb, var(--foreground) 15%, transparent);
+    border-radius: 9999px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background-color: var(--primary);
+    border-radius: 9999px;
+    transition: width var(--duration-normal) var(--ease-default);
+  }
+
+  /* ── Watched Badge ───────────────────────────────────────── */
+  /* Checkmark badge overlay on fully-watched media cards.
+     Position: absolute top-right of card.
+     Usage: <div class="relative">
+              <img ... />
+              <div class="watched-badge"><Check /></div>
+            </div>                                              */
+  .watched-badge {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 9999px;
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+  }
+
+  /* ── Play Overlay ────────────────────────────────────────── */
+  /* Semi-transparent play button centered on thumbnails.
+     Usage: <div class="relative group">
+              <img ... />
+              <div class="play-overlay"><Play /></div>
+            </div>                                              */
+  .play-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--background) 40%, transparent);
+    border-radius: inherit;
+    opacity: 0;
+    transition: opacity var(--duration-normal) var(--ease-default);
+  }
+  .group:hover .play-overlay,
+  .play-overlay:hover {
+    opacity: 1;
+  }
+
+  /* ── Impersonation Banner ────────────────────────────────── */
+  /* Override strip shown while an admin is viewing the app as
+     another user. Warm-gold accents on a glass-dark surface —
+     unmistakable without being alarming. Pinned to the viewport
+     top via Tailwind's `sticky top-0 z-50` utilities on the
+     outer element.                                              */
+  /* Global sidebar offset used by out-of-tree chrome that needs to
+     align with the current sidebar width. Layout sets
+     `data-sidebar-collapsed` on the root element; this media-query
+     block resolves the correct px value per breakpoint/state.     */
+  :root {
+    --app-sidebar-offset: 0px;
+  }
+  @media (min-width: 1024px) {
+    :root {
+      --app-sidebar-offset: 260px;
+    }
+    :root[data-sidebar-collapsed="true"] {
+      --app-sidebar-offset: 64px;
+    }
+  }
+
+  .impersonation-banner {
+    --impersonation-accent: oklch(0.82 0.14 78);
+    --impersonation-accent-glow: oklch(0.82 0.14 78 / 0.55);
+    --impersonation-accent-soft: oklch(0.82 0.14 78 / 0.12);
+    --impersonation-accent-line: oklch(0.82 0.14 78 / 0.32);
+
+    margin-left: var(--app-sidebar-offset);
+    transition: margin-left var(--duration-normal) var(--ease-default);
+    position: sticky;
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--background) 94%, transparent),
+      color-mix(in srgb, var(--background) 88%, transparent)
+    );
+    backdrop-filter: blur(20px) saturate(1.3);
+    -webkit-backdrop-filter: blur(20px) saturate(1.3);
+    border-bottom: 1px solid color-mix(in srgb, var(--impersonation-accent) 16%, var(--border));
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--impersonation-accent) 22%, transparent),
+      0 10px 32px -20px rgb(0 0 0 / 0.65);
+  }
+
+  /* Luminous top accent line — fades in from both edges so the
+     banner reads as a deliberate strip rather than a hard bar. */
+  .impersonation-banner::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--impersonation-accent-line) 18%,
+      var(--impersonation-accent-line) 82%,
+      transparent
+    );
+    pointer-events: none;
+  }
+
+  /* Soft warm wash on the left edge so the eye lands on the
+     status dot first. Fades out before the button column. */
+  .impersonation-banner::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--impersonation-accent) 10%, transparent),
+      transparent 38%
+    );
+    pointer-events: none;
+  }
+
+  .impersonation-banner-inner {
+    position: relative;
+    z-index: 1;
+  }
+
+  .impersonation-dot {
+    background: var(--impersonation-accent);
+    box-shadow: 0 0 10px 1px var(--impersonation-accent-glow);
+  }
+
+  .impersonation-pulse {
+    background: var(--impersonation-accent);
+    opacity: 0.55;
+  }
+
+  .impersonation-label {
+    letter-spacing: 0.22em;
+    color: color-mix(in srgb, var(--impersonation-accent) 85%, var(--foreground));
+  }
+
+  .impersonation-chip {
+    background: var(--impersonation-accent-soft);
+    color: color-mix(in srgb, var(--impersonation-accent) 85%, var(--foreground));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--impersonation-accent) 32%, transparent);
+  }
+
+  .impersonation-end-btn {
+    color: var(--foreground);
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    border: 1px solid color-mix(in srgb, var(--impersonation-accent) 24%, var(--border));
+  }
+
+  .impersonation-end-btn:hover {
+    background: color-mix(in srgb, var(--impersonation-accent) 14%, transparent);
+    border-color: color-mix(in srgb, var(--impersonation-accent) 55%, var(--border));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--impersonation-accent) 8%, transparent);
+  }
+
+  .impersonation-end-btn:focus-visible {
+    border-color: var(--impersonation-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--impersonation-accent) 28%, transparent);
+  }
+}
