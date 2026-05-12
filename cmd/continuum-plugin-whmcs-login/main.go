@@ -1,11 +1,11 @@
 // Command continuum-plugin-whmcs-login serves the WHMCS auth provider plugin
-// over hashicorp/go-plugin. main wires the SDK runtime + http_routes + auth
-// provider capabilities and composes the admin HTTP surface from
-// internal/admin. Later phases mount the admin SPA.
+// over hashicorp/go-plugin. main wires runtime + auth_provider + http_routes
+// and serves the admin SPA + assets.
 package main
 
 import (
 	"crypto/sha256"
+	"embed"
 	_ "embed"
 	"encoding/hex"
 	"fmt"
@@ -26,13 +26,17 @@ import (
 	pluginrt "github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/runtime"
 	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/server"
 	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/whmcs"
+	"github.com/ContinuumApp/continuum-plugin-whmcs-login/web"
 )
 
 //go:embed manifest.json
 var manifestRaw []byte
 
-// productCacheTTL is the lifetime of cached responses from
-// /api/v1/admin/products. Admins can force a refresh via the SPA.
+//go:embed all:assets
+var staticAssets embed.FS
+
+// productCacheTTL is the lifetime of cached responses from /api/v1/admin/products.
+// Admins can force a refresh from the SPA via the products/refresh endpoint.
 const productCacheTTL = 5 * time.Minute
 
 func main() {
@@ -47,7 +51,7 @@ func main() {
 	httpSrv := httproutes.NewServer()
 
 	// cfgPtr holds the latest Config so AuthServer + AdminServer see new
-	// values immediately on Configure without rebuilding the gRPC plumbing.
+	// values immediately on Configure without rebuilding gRPC plumbing.
 	var cfgPtr atomic.Pointer[pluginrt.Config]
 	cfgFn := func() pluginrt.Config {
 		if p := cfgPtr.Load(); p != nil {
@@ -61,9 +65,6 @@ func main() {
 	rt := pluginrt.New(manifest, func(cfg pluginrt.Config) error {
 		cfgPtr.Store(&cfg)
 
-		// Build a fresh product cache if admin API creds are present.
-		// A nil cache makes the /products endpoint return 503 with a clear
-		// message, which is what we want before the admin sets the creds.
 		var prodCache *whmcs.ProductCache
 		if cfg.WHMCSAdminAPIID != "" && cfg.WHMCSAdminAPISecret != "" {
 			apiClient := whmcs.NewAPIClient(cfg.WHMCSServerURL, cfg.WHMCSAdminAPIID, cfg.WHMCSAdminAPISecret)
@@ -75,9 +76,16 @@ func main() {
 			ProductCache: prodCache,
 		})
 
-		srv := server.New(server.Deps{Admin: adminSrv})
+		srv := server.New(server.Deps{
+			Admin:      adminSrv,
+			SPAFiles:   web.FS(),
+			StaticFS:   staticAssets,
+			StaticRoot: "assets",
+		})
 		httpSrv.SetHandler(srv.Handler())
-		logger.Info("configured", "whmcs_server_url", cfg.WHMCSServerURL, "admin_api_configured", prodCache != nil)
+		logger.Info("configured",
+			"whmcs_server_url", cfg.WHMCSServerURL,
+			"admin_api_configured", prodCache != nil)
 		return nil
 	})
 
