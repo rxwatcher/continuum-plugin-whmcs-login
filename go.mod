@@ -6,13 +6,14 @@ replace github.com/ContinuumApp/continuum-plugin-sdk => /opt/worktrees/continuum
 
 require (
 	github.com/ContinuumApp/continuum-plugin-sdk v0.0.0
+	github.com/go-chi/chi/v5 v5.2.5
+	github.com/hashicorp/go-hclog v1.6.3
 	google.golang.org/protobuf v1.36.11
 )
 
 require (
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/hashicorp/go-hclog v1.6.3 // indirect
 	github.com/hashicorp/go-plugin v1.7.0 // indirect
 	github.com/hashicorp/yamux v0.1.2 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
