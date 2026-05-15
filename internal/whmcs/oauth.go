@@ -20,6 +20,13 @@ import (
 // httpTimeout is the per-request timeout for upstream WHMCS calls.
 const httpTimeout = 30 * time.Second
 
+// maxResponseBytes caps the body the WHMCS HTTP clients (oauth.go + api.go)
+// will read from upstream. Token, userinfo, and admin-API JSON payloads are
+// well under this in normal operation; the cap defends against memory
+// exhaustion if a misbehaving or hostile WHMCS instance streams a runaway
+// response.
+const maxResponseBytes = 10 << 20 // 10 MiB
+
 // GeneratePKCE returns a 64-char URL-safe verifier + its S256 challenge.
 // The verifier conforms to RFC 7636 §4.1 (43..128 chars); the challenge is
 // the base64url(SHA256(verifier)).
@@ -109,7 +116,10 @@ func ExchangeCode(ctx context.Context, p ExchangeParams) (TokenResponse, error) 
 		return TokenResponse{}, fmt.Errorf("token endpoint: %w", err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+	if err != nil {
+		return TokenResponse{}, fmt.Errorf("token endpoint read body: %w", err)
+	}
 	if resp.StatusCode >= 400 {
 		return TokenResponse{}, fmt.Errorf("token endpoint %d: %s", resp.StatusCode, string(body))
 	}
@@ -147,7 +157,10 @@ func FetchUserInfo(ctx context.Context, serverURL, accessToken string) (UserInfo
 		return UserInfo{}, fmt.Errorf("userinfo endpoint: %w", err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+	if err != nil {
+		return UserInfo{}, fmt.Errorf("userinfo endpoint read body: %w", err)
+	}
 	if resp.StatusCode >= 400 {
 		return UserInfo{}, fmt.Errorf("userinfo endpoint %d: %s", resp.StatusCode, string(body))
 	}

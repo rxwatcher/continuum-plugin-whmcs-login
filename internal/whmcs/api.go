@@ -42,10 +42,21 @@ type Product struct {
 
 // ClientProduct is a row from GetClientsProducts (note the different set of
 // fields available on this endpoint compared to GetProducts).
+//
+// Status is a pointer so we can distinguish:
+//   - nil           → WHMCS omitted the field (older versions did this on
+//                     GetClientsProducts). Treated as Active per historical
+//                     compatibility behavior.
+//   - non-nil ""    → WHMCS returned an explicit empty status. Treated as
+//                     INACTIVE (defensive — we'd rather a future WHMCS
+//                     version use empty for suspended than have a suspended
+//                     user retain access).
+//   - non-nil "Active" → Active.
+//   - non-nil other → Inactive.
 type ClientProduct struct {
-	PID    int    `json:"pid"`
-	Name   string `json:"name"`
-	Status string `json:"status,omitempty"`
+	PID    int     `json:"pid"`
+	Name   string  `json:"name"`
+	Status *string `json:"status,omitempty"`
 }
 
 // ClientDetails is the typed projection of GetClientsDetails.
@@ -58,7 +69,9 @@ type ClientDetails struct {
 }
 
 // rawProduct is an intermediate decoding shape that tolerates WHMCS's loose
-// types (pid as int or string, group as different field names).
+// types (pid as int or string, group as different field names). Status is a
+// pointer so toClientProduct can preserve the field-omitted vs
+// present-but-empty distinction (see ClientProduct docstring).
 type rawProduct struct {
 	PID       json.RawMessage `json:"pid"`
 	GID       json.RawMessage `json:"gid"`
@@ -66,7 +79,7 @@ type rawProduct struct {
 	Type      string          `json:"type"`
 	PayType   string          `json:"paytype"`
 	GroupName string          `json:"groupname"`
-	Status    string          `json:"status"`
+	Status    *string         `json:"status,omitempty"`
 }
 
 func (r rawProduct) toProduct() Product {
@@ -131,7 +144,10 @@ func (c *APIClient) post(ctx context.Context, action string, extra url.Values) (
 		return nil, fmt.Errorf("whmcs api: %w", err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+	if err != nil {
+		return nil, fmt.Errorf("whmcs api read body: %w", err)
+	}
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("whmcs api %d: %s", resp.StatusCode, string(body))
 	}

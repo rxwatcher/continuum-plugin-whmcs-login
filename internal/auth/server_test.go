@@ -238,6 +238,107 @@ func TestExchangeCode_DiscordIDClaim_FetchedFromCustomField(t *testing.T) {
 	}
 }
 
+// PKCE is this plugin's CSRF defense for the OAuth callback: the verifier
+// generated in InitAuthorize is round-tripped via provider_state and bound to
+// the upstream code_challenge. A missing or mismatched verifier MUST cause
+// ExchangeCode to reject — these tests pin that contract.
+
+func TestExchangeCode_CSRF_RejectsNilProviderState(t *testing.T) {
+	s := newAuthServer(pluginrt.Config{
+		WHMCSServerURL: "https://x", ClientID: "c", ClientSecret: "s",
+	})
+	_, err := s.ExchangeCode(context.Background(), &pluginv1.ExchangeCodeRequest{
+		Code:        "auth-code",
+		State:       "state-1",
+		RedirectUri: "/cb",
+		// ProviderState intentionally nil — simulates a callback whose
+		// state round-trip was lost or never set.
+	})
+	if err == nil {
+		t.Fatal("expected rejection when provider_state is missing")
+	}
+	if status.Code(err) != codes.InvalidArgument {
+		t.Errorf("code = %v, want InvalidArgument; err = %v", status.Code(err), err)
+	}
+}
+
+func TestExchangeCode_CSRF_RejectsMismatchedPKCEVerifier(t *testing.T) {
+	// Upstream WHMCS hashes the verifier and compares to the challenge it
+	// recorded at /oauth/authorize.php — a mismatched verifier yields 400.
+	// The plugin must surface that as an error, NOT return a successful
+	// AuthenticateResponse.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/oauth/token.php" {
+			t.Errorf("unexpected upstream call: %s", r.URL.Path)
+			w.WriteHeader(500)
+			return
+		}
+		_ = r.ParseForm()
+		if r.Form.Get("code_verifier") != "wrong-verifier" {
+			t.Errorf("verifier = %q, want wrong-verifier", r.Form.Get("code_verifier"))
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"invalid_grant","error_description":"code_verifier mismatch"}`))
+	}))
+	defer srv.Close()
+
+	s := newAuthServer(pluginrt.Config{
+		WHMCSServerURL: srv.URL, ClientID: "c", ClientSecret: "s",
+	})
+	_, err := s.ExchangeCode(context.Background(), &pluginv1.ExchangeCodeRequest{
+		Code:          "auth-code",
+		State:         "state-1",
+		RedirectUri:   "/cb",
+		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "wrong-verifier"}),
+	})
+	if err == nil {
+		t.Fatal("expected rejection when upstream rejects code_verifier")
+	}
+	if status.Code(err) != codes.Internal {
+		t.Errorf("code = %v, want Internal; err = %v", status.Code(err), err)
+	}
+}
+
+func TestExchangeCode_CSRF_AcceptsValidPKCEVerifier(t *testing.T) {
+	// Valid state path: provider_state carries the verifier minted in
+	// InitAuthorize, the upstream accepts it, and ExchangeCode returns
+	// an AuthenticateResponse with the userinfo populated.
+	const verifier = "correct-verifier"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/oauth/token.php":
+			_ = r.ParseForm()
+			if r.Form.Get("code_verifier") != verifier {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error":"invalid_grant"}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"access_token":"AT","id_token":"a.b.c","token_type":"Bearer","expires_in":3600}`))
+		case "/oauth/userinfo.php":
+			_, _ = w.Write([]byte(`{"id":"42","email":"u@x.com","name":"User"}`))
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+
+	s := newAuthServer(pluginrt.Config{
+		WHMCSServerURL: srv.URL, ClientID: "c", ClientSecret: "s",
+	})
+	resp, err := s.ExchangeCode(context.Background(), &pluginv1.ExchangeCodeRequest{
+		Code:          "auth-code",
+		State:         "state-1",
+		RedirectUri:   "/cb",
+		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": verifier}),
+	})
+	if err != nil {
+		t.Fatalf("ExchangeCode: %v", err)
+	}
+	if resp.GetExternalSubject() != "42" {
+		t.Errorf("external_subject = %q, want 42", resp.GetExternalSubject())
+	}
+}
+
 func TestAuthenticate_ReturnsUnimplemented(t *testing.T) {
 	s := newAuthServer(pluginrt.Config{})
 	_, err := s.Authenticate(context.Background(), &pluginv1.AuthenticateRequest{Username: "u", Password: "p"})

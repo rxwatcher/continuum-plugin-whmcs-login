@@ -166,12 +166,23 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 }
 
 // activeProductIDs returns the PIDs (as decimal strings) of products the
-// client owns with status "Active" (or unset, which some WHMCS versions
-// return for client-products).
+// client owns with an Active-equivalent status.
+//
+// Treated as active:
+//   - Status == nil (WHMCS omitted the field — legacy compat).
+//   - Status != nil && *Status == "Active".
+//
+// Treated as inactive (and excluded from gating):
+//   - Status != nil && *Status == ""  — WHMCS explicitly returned empty,
+//     which is conservatively interpreted as not-active. If a future
+//     deployment hits a WHMCS variant that returns "" for genuinely active
+//     products, this allowlist needs to be extended.
+//   - Status != nil && *Status == "Suspended" | "Terminated" | "Cancelled" |
+//     "Fraud" | "Pending" (or anything else).
 func activeProductIDs(prods []whmcs.ClientProduct) []string {
 	out := make([]string, 0, len(prods))
 	for _, p := range prods {
-		if p.Status == "" || p.Status == "Active" {
+		if p.Status == nil || *p.Status == "Active" {
 			out = append(out, strconv.Itoa(p.PID))
 		}
 	}

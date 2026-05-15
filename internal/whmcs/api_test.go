@@ -93,7 +93,7 @@ func TestGetClientsProducts_FiltersByClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetClientsProducts: %v", err)
 	}
-	if len(prods) != 1 || prods[0].PID != 5 || prods[0].Status != "Active" {
+	if len(prods) != 1 || prods[0].PID != 5 || prods[0].Status == nil || *prods[0].Status != "Active" {
 		t.Errorf("prods = %+v", prods)
 	}
 }
