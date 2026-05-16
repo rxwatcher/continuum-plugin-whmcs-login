@@ -141,16 +141,24 @@ func TestExchangeCode_ProductGating_RejectsWhenNoMatchingProduct(t *testing.T) {
 		case "/oauth/userinfo.php":
 			_, _ = w.Write([]byte(`{"id":"42","email":"u@x.com","name":"User"}`))
 		case "/includes/api.php":
-			_, _ = w.Write([]byte(`{"result":"success","products":{"product":[{"pid":99,"name":"Other","status":"Active"}]}}`))
+			_ = r.ParseForm()
+			switch r.Form.Get("action") {
+			case "GetClients":
+				_, _ = w.Write([]byte(`{"result":"success","clients":{"client":[{"id":"42","email":"u@x.com"}]}}`))
+			case "GetClientsProducts":
+				_, _ = w.Write([]byte(`{"result":"success","products":{"product":[{"pid":99,"name":"Other","status":"Active"}]}}`))
+			default:
+				_, _ = w.Write([]byte(`{"result":"error","message":"unexpected action"}`))
+			}
 		}
 	}))
 	defer srv.Close()
 
 	cfg := pluginrt.Config{
-		WHMCSServerURL:      srv.URL,
-		ClientID:            "c", ClientSecret: "s",
-		AllowedProductIDs:   []string{"5"},
-		WHMCSAdminAPIID:     "id", WHMCSAdminAPISecret: "sec",
+		WHMCSServerURL: srv.URL,
+		ClientID:       "c", ClientSecret: "s",
+		AllowedProductIDs: []string{"5"},
+		WHMCSAdminAPIID:   "id", WHMCSAdminAPISecret: "sec",
 	}
 	s := newAuthServer(cfg)
 
@@ -174,7 +182,15 @@ func TestExchangeCode_ProductGating_AcceptsWhenMatching(t *testing.T) {
 		case "/oauth/userinfo.php":
 			_, _ = w.Write([]byte(`{"id":"42","email":"u@x.com","name":"User"}`))
 		case "/includes/api.php":
-			_, _ = w.Write([]byte(`{"result":"success","products":{"product":[{"pid":5,"name":"Pro","status":"Active"},{"pid":99,"name":"Other","status":"Active"}]}}`))
+			_ = r.ParseForm()
+			switch r.Form.Get("action") {
+			case "GetClients":
+				_, _ = w.Write([]byte(`{"result":"success","clients":{"client":[{"id":"42","email":"u@x.com"}]}}`))
+			case "GetClientsProducts":
+				_, _ = w.Write([]byte(`{"result":"success","products":{"product":[{"pid":5,"name":"Pro","status":"Active"},{"pid":99,"name":"Other","status":"Active"}]}}`))
+			default:
+				_, _ = w.Write([]byte(`{"result":"error","message":"unexpected action"}`))
+			}
 		}
 	}))
 	defer srv.Close()
@@ -209,6 +225,10 @@ func TestExchangeCode_DiscordIDClaim_FetchedFromCustomField(t *testing.T) {
 			_, _ = w.Write([]byte(`{"id":"42","email":"u@x.com","name":"User"}`))
 		case "/includes/api.php":
 			_ = r.ParseForm()
+			if r.Form.Get("action") == "GetClients" {
+				_, _ = w.Write([]byte(`{"result":"success","clients":{"client":[{"id":"42","email":"u@x.com"}]}}`))
+				return
+			}
 			if r.Form.Get("action") == "GetClientsDetails" {
 				_, _ = w.Write([]byte(`{"result":"success","client":{"id":"42","email":"u@x.com","customfields":[{"value":"183","fieldname":"Discord ID"}]}}`))
 				return

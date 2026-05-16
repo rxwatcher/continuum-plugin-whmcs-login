@@ -1,7 +1,6 @@
 package runtime
 
 import (
-	"strings"
 	"testing"
 
 	pluginv1 "github.com/ContinuumApp/continuum-plugin-sdk/pkg/pluginproto/continuum/plugin/v1"
@@ -51,16 +50,17 @@ func TestLoadConfig_HappyPath(t *testing.T) {
 	}
 }
 
-func TestLoadConfig_RequiredFields(t *testing.T) {
+func TestLoadConfig_AllowsIncompleteSetup(t *testing.T) {
 	cases := map[string][]*pluginv1.ConfigEntry{
+		"empty":          nil,
 		"missing url":    {entry(t, "client_id", "c"), entry(t, "client_secret", "s")},
 		"missing client": {entry(t, "whmcs_server_url", "https://x"), entry(t, "client_secret", "s")},
 		"missing secret": {entry(t, "whmcs_server_url", "https://x"), entry(t, "client_id", "c")},
 	}
 	for name, entries := range cases {
 		t.Run(name, func(t *testing.T) {
-			if _, err := loadConfig(entries); err == nil {
-				t.Errorf("expected error for %s", name)
+			if _, err := loadConfig(entries); err != nil {
+				t.Errorf("loadConfig(%s): %v", name, err)
 			}
 		})
 	}
@@ -97,9 +97,8 @@ func TestLoadConfig_AllowedProductsRequireAdminAPI(t *testing.T) {
 		entry(t, "client_secret", "s"),
 		entry(t, "allowed_product_ids", "1,2"),
 	}
-	_, err := loadConfig(entries)
-	if err == nil || !strings.Contains(err.Error(), "whmcs_admin_api_id") {
-		t.Errorf("expected admin api error, got: %v", err)
+	if _, err := loadConfig(entries); err != nil {
+		t.Errorf("loadConfig should allow incomplete admin API setup for SPA access: %v", err)
 	}
 }
 
@@ -110,8 +109,8 @@ func TestLoadConfig_FetchDiscordRequiresAdminAPI(t *testing.T) {
 		entry(t, "client_secret", "s"),
 		entry(t, "fetch_discord_id", true),
 	}
-	if _, err := loadConfig(entries); err == nil {
-		t.Error("expected validation error for fetch_discord_id without admin api creds")
+	if _, err := loadConfig(entries); err != nil {
+		t.Errorf("loadConfig should allow incomplete admin API setup for SPA access: %v", err)
 	}
 }
 

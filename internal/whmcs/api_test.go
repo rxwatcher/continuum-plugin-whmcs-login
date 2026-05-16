@@ -75,6 +75,29 @@ func TestGetProducts_EmptyEnvelope(t *testing.T) {
 	}
 }
 
+func TestGetClientByEmail_ReturnsExactMatch(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		if r.Form.Get("action") != "GetClients" {
+			t.Errorf("action = %q", r.Form.Get("action"))
+		}
+		if r.Form.Get("search") != "u@x.com" {
+			t.Errorf("search = %q", r.Form.Get("search"))
+		}
+		_, _ = w.Write([]byte(`{"result":"success","clients":{"client":[{"id":"41","email":"other@x.com"},{"id":"42","email":"U@x.com"}]}}`))
+	}))
+	defer srv.Close()
+
+	c := whmcs.NewAPIClient(srv.URL, "id", "sec")
+	client, err := c.GetClientByEmail(context.Background(), "u@x.com")
+	if err != nil {
+		t.Fatalf("GetClientByEmail: %v", err)
+	}
+	if client == nil || client.ID != "42" {
+		t.Fatalf("client = %+v, want id 42", client)
+	}
+}
+
 func TestGetClientsProducts_FiltersByClient(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()

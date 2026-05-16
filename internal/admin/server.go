@@ -104,6 +104,7 @@ func (s *Server) HandleConfigSummary(w http.ResponseWriter, _ *http.Request) {
 		"whmcs_server_url":           cfg.WHMCSServerURL,
 		"client_id":                  cfg.ClientID,
 		"has_client_secret":          cfg.ClientSecret != "",
+		"display_name":               cfg.DisplayName,
 		"whmcs_admin_api_id":         cfg.WHMCSAdminAPIID,
 		"has_whmcs_admin_api_secret": cfg.WHMCSAdminAPISecret != "",
 		"allowed_product_ids":        intIDs,

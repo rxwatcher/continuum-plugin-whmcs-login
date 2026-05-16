@@ -11,8 +11,8 @@ const products = [
 describe("ProductSelector", () => {
   it("renders both columns with titles", () => {
     render(<ProductSelector products={products} initialEnabled={[]} onSave={() => {}} />);
-    expect(screen.getByText("Available Products")).toBeInTheDocument();
-    expect(screen.getByText("Enabled Products")).toBeInTheDocument();
+    expect(screen.getByText("Available products")).toBeInTheDocument();
+    expect(screen.getByText("Allowed products")).toBeInTheDocument();
   });
 
   it("filters Available by search query (case-insensitive)", () => {
@@ -26,37 +26,37 @@ describe("ProductSelector", () => {
   it("moves a product to Enabled on click", () => {
     render(<ProductSelector products={products} initialEnabled={[]} onSave={() => {}} />);
     fireEvent.click(screen.getByText("Basic"));
-    // After click: Basic should be under the Enabled Products column.
-    const enabledColumn = screen.getByText("Enabled Products").closest("div")!.parentElement!;
+    // After click: Basic should be under the Allowed products column.
+    const enabledColumn = screen.getByText("Allowed products").closest("div")!.parentElement!;
     expect(within(enabledColumn).getByText("Basic")).toBeInTheDocument();
   });
 
   it("emits save with the comma-separated sorted pid list", () => {
     const onSave = vi.fn();
     render(<ProductSelector products={products} initialEnabled={[5, 1]} onSave={onSave} />);
-    fireEvent.click(screen.getByText("Save Changes"));
+    fireEvent.click(screen.getByText("Save product access"));
     expect(onSave).toHaveBeenCalledWith("1,5");
   });
 
   it("emits empty string when nothing enabled", () => {
     const onSave = vi.fn();
     render(<ProductSelector products={products} initialEnabled={[]} onSave={onSave} />);
-    fireEvent.click(screen.getByText("Save Changes"));
+    fireEvent.click(screen.getByText("Save product access"));
     expect(onSave).toHaveBeenCalledWith("");
   });
 
-  it("Enable All moves every product to the Enabled column", () => {
+  it("Select all moves every product to the Allowed column", () => {
     render(<ProductSelector products={products} initialEnabled={[]} onSave={() => {}} />);
-    fireEvent.click(screen.getByText("Enable All"));
-    const enabledColumn = screen.getByText("Enabled Products").closest("div")!.parentElement!;
+    fireEvent.click(screen.getByText("Select all"));
+    const enabledColumn = screen.getByText("Allowed products").closest("div")!.parentElement!;
     expect(within(enabledColumn).getByText("Basic")).toBeInTheDocument();
     expect(within(enabledColumn).getByText("Pro")).toBeInTheDocument();
   });
 
-  it("Disable All clears the Enabled column", () => {
+  it("Clear clears the Allowed column", () => {
     render(<ProductSelector products={products} initialEnabled={[1, 5]} onSave={() => {}} />);
-    fireEvent.click(screen.getByText("Disable All"));
-    const enabledColumn = screen.getByText("Enabled Products").closest("div")!.parentElement!;
+    fireEvent.click(screen.getByText("Clear"));
+    const enabledColumn = screen.getByText("Allowed products").closest("div")!.parentElement!;
     expect(within(enabledColumn).getByText("No products")).toBeInTheDocument();
   });
 });

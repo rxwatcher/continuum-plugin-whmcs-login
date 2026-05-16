@@ -45,12 +45,12 @@ type Product struct {
 //
 // Status is a pointer so we can distinguish:
 //   - nil           → WHMCS omitted the field (older versions did this on
-//                     GetClientsProducts). Treated as Active per historical
-//                     compatibility behavior.
+//     GetClientsProducts). Treated as Active per historical
+//     compatibility behavior.
 //   - non-nil ""    → WHMCS returned an explicit empty status. Treated as
-//                     INACTIVE (defensive — we'd rather a future WHMCS
-//                     version use empty for suspended than have a suspended
-//                     user retain access).
+//     INACTIVE (defensive — we'd rather a future WHMCS
+//     version use empty for suspended than have a suspended
+//     user retain access).
 //   - non-nil "Active" → Active.
 //   - non-nil other → Inactive.
 type ClientProduct struct {
@@ -66,6 +66,12 @@ type ClientDetails struct {
 	FirstName    string
 	LastName     string
 	CustomFields map[string]string
+}
+
+// Client is a row from GetClients.
+type Client struct {
+	ID    string
+	Email string
 }
 
 // rawProduct is an intermediate decoding shape that tolerates WHMCS's loose
@@ -184,6 +190,50 @@ func (c *APIClient) GetProducts(ctx context.Context) ([]Product, error) {
 		out = append(out, r.toProduct())
 	}
 	return out, nil
+}
+
+// GetClientByEmail returns the first WHMCS client whose email matches exactly,
+// using GetClients(search=...) and a case-insensitive filter on the returned
+// rows.
+func (c *APIClient) GetClientByEmail(ctx context.Context, email string) (*Client, error) {
+	body, err := c.post(ctx, "GetClients", url.Values{
+		"search": {email},
+		"stats":  {"false"},
+	})
+	if err != nil {
+		return nil, err
+	}
+	var env struct {
+		Clients struct {
+			Client json.RawMessage `json:"client"`
+		} `json:"clients"`
+	}
+	if err := json.Unmarshal(body, &env); err != nil {
+		return nil, fmt.Errorf("decode clients: %w", err)
+	}
+	if len(env.Clients.Client) == 0 {
+		return nil, nil
+	}
+	var rows []struct {
+		ID    json.RawMessage `json:"id"`
+		Email string          `json:"email"`
+	}
+	if err := json.Unmarshal(env.Clients.Client, &rows); err != nil {
+		var single struct {
+			ID    json.RawMessage `json:"id"`
+			Email string          `json:"email"`
+		}
+		if err := json.Unmarshal(env.Clients.Client, &single); err != nil {
+			return nil, fmt.Errorf("decode client entries: %w", err)
+		}
+		rows = append(rows, single)
+	}
+	for _, row := range rows {
+		if strings.EqualFold(strings.TrimSpace(row.Email), strings.TrimSpace(email)) {
+			return &Client{ID: rawToString(row.ID), Email: row.Email}, nil
+		}
+	}
+	return nil, nil
 }
 
 // GetClientsProducts lists products owned by a specific WHMCS client.

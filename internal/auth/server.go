@@ -114,22 +114,35 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 			"given_name":  ui.GivenName,
 			"family_name": ui.FamilyName,
 		},
+		"continuum_link_by_email": true,
 	}
 
-	if len(cfg.AllowedProductIDs) > 0 || cfg.FetchDiscordID {
+	if len(cfg.AllowedProductIDs) > 0 || len(cfg.ClaimRoleMapping) > 0 || cfg.FetchDiscordID {
 		if cfg.WHMCSAdminAPIID == "" || cfg.WHMCSAdminAPISecret == "" {
 			return nil, status.Error(codes.FailedPrecondition,
 				"admin API credentials required for product gating / Discord ID fetch")
 		}
 		api := whmcs.NewAPIClient(cfg.WHMCSServerURL, cfg.WHMCSAdminAPIID, cfg.WHMCSAdminAPISecret)
+		clientID := ui.ID
+		if ui.Email != "" {
+			client, err := api.GetClientByEmail(ctx, ui.Email)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "fetch client by email: %v", err)
+			}
+			if client == nil || client.ID == "" {
+				return nil, status.Error(codes.PermissionDenied, "no WHMCS client found for this email")
+			}
+			clientID = client.ID
+		}
 
-		if len(cfg.AllowedProductIDs) > 0 {
-			prods, err := api.GetClientsProducts(ctx, ui.ID)
+		var ownedActive []string
+		if len(cfg.AllowedProductIDs) > 0 || len(cfg.ClaimRoleMapping) > 0 {
+			prods, err := api.GetClientsProducts(ctx, clientID)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "fetch client products: %v", err)
 			}
-			ownedActive := activeProductIDs(prods)
-			if !anyMatch(cfg.AllowedProductIDs, ownedActive) {
+			ownedActive = activeProductIDs(prods)
+			if len(cfg.AllowedProductIDs) > 0 && !anyMatch(cfg.AllowedProductIDs, ownedActive) {
 				return nil, status.Error(codes.PermissionDenied,
 					"your WHMCS account doesn't have an allowed active product")
 			}
@@ -143,13 +156,17 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 		}
 
 		if cfg.FetchDiscordID {
-			cd, err := api.GetClientsDetails(ctx, ui.ID)
+			cd, err := api.GetClientsDetails(ctx, clientID)
 			if err == nil {
 				if id, ok := cd.CustomFields[cfg.DiscordIDCustomField]; ok && id != "" {
 					claims["discord_id"] = id
 				}
 			}
 			// Discord ID failure is non-fatal — login succeeds, claim is absent.
+		}
+
+		if len(ownedActive) > 0 {
+			claims["continuum_role"] = roleFromProducts(ownedActive, cfg.ClaimRoleMapping)
 		}
 	}
 
@@ -198,4 +215,23 @@ func anyMatch(want, have []string) bool {
 		}
 	}
 	return false
+}
+
+func roleFromProducts(products []string, mappings []pluginrt.ClaimRoleMap) string {
+	role := "user"
+	for _, m := range mappings {
+		if m.Role != "admin" && m.Role != "user" {
+			continue
+		}
+		for _, p := range products {
+			if p != m.ProductID {
+				continue
+			}
+			if m.Role == "admin" {
+				return "admin"
+			}
+			role = "user"
+		}
+	}
+	return role
 }

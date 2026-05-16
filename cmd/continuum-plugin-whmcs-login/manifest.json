@@ -21,9 +21,8 @@
   ],
   "http_routes": [
     {"id": "assets", "method": "GET", "path": "/assets/*", "access": "public"},
-    {"id": "admin_html", "method": "GET", "path": "/admin", "access": "authenticated", "navigable": true, "navigation_label": "WHMCS Login", "navigation_kind": "admin"},
-    {"id": "admin_html_sub", "method": "GET", "path": "/admin/*", "access": "authenticated"},
-    {"id": "admin_api", "method": "*", "path": "/api/v1/admin/*", "access": "authenticated"},
+    {"id": "admin_html", "method": "GET", "path": "/admin/*", "access": "admin", "navigable": true, "navigation_label": "WHMCS Login", "navigation_kind": "admin"},
+    {"id": "admin_api", "method": "*", "path": "/api/v1/admin/*", "access": "admin"},
     {"id": "health", "method": "GET", "path": "/api/v1/health", "access": "public"}
   ],
   "global_config_schema": [
@@ -58,6 +57,17 @@
       "admin_form": {
         "fields": [
           {"key": "value", "label": "Client secret", "control": "ADMIN_FORM_CONTROL_PASSWORD", "required": true, "secret": true}
+        ]
+      }
+    },
+    {
+      "key": "display_name",
+      "title": "Login button label",
+      "description": "Text shown for this provider on the Continuum login screen. Leave empty to use the default manifest label.",
+      "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}}}",
+      "admin_form": {
+        "fields": [
+          {"key": "value", "label": "Button label", "control": "ADMIN_FORM_CONTROL_TEXT"}
         ]
       }
     },

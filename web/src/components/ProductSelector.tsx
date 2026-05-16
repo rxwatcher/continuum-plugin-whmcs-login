@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 export type Product = {
@@ -68,25 +69,34 @@ export default function ProductSelector({ products, initialEnabled, onSave, savi
   };
   const enableAll = () => setEnabled(new Set(products.map((p) => p.pid)));
   const disableAll = () => setEnabled(new Set());
-  const save = () => onSave(Array.from(enabled).sort((a, b) => a - b).join(","));
+  const enabledIDs = useMemo(() => Array.from(enabled).sort((a, b) => a - b), [enabled]);
+  const save = () => onSave(enabledIDs.join(","));
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium">Product Access Control</h2>
-        <div className="flex items-center gap-2">
+    <div className="border-border/70 bg-card text-card-foreground rounded-lg border">
+      <div className="flex flex-col gap-3 p-6 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Select allowed WHMCS products</h2>
+          <p className="text-muted-foreground mt-1 text-sm">
+            A user must own at least one selected active product to sign in. Leave the
+            selection empty only when every WHMCS OAuth user should be allowed.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
           <Button variant="outline" size="sm" onClick={enableAll}>
-            Enable All
+            Select all
           </Button>
           <Button variant="outline" size="sm" onClick={disableAll}>
-            Disable All
+            Clear
           </Button>
         </div>
       </div>
 
-      <div className="flex gap-4">
+      <Separator />
+
+      <div className="grid gap-4 p-6 lg:grid-cols-2">
         <Column
-          title="Available Products"
+          title="Available products"
           products={available}
           isSelected={false}
           count={`${available.length} products`}
@@ -104,7 +114,7 @@ export default function ProductSelector({ products, initialEnabled, onSave, savi
           }
         />
         <Column
-          title="Enabled Products"
+          title="Allowed products"
           products={enabledList}
           isSelected={true}
           count={`${enabledList.length} products`}
@@ -112,12 +122,13 @@ export default function ProductSelector({ products, initialEnabled, onSave, savi
         />
       </div>
 
-      <div className="flex items-center justify-end gap-3">
-        <p className="text-muted-foreground text-xs">
-          If no products are enabled, all products are allowed.
-        </p>
+      <Separator />
+
+      <div className="flex flex-col gap-3 p-6 sm:flex-row sm:items-center sm:justify-between">
+        <SelectionSummary enabledIDs={enabledIDs} />
         <Button onClick={save} size="sm" disabled={saving}>
-          Save Changes
+          <Check className="mr-2 size-4" />
+          Save product access
         </Button>
       </div>
     </div>
@@ -146,19 +157,28 @@ function Column({
         <span className="text-muted-foreground text-xs">{count}</span>
       </div>
       {searchBox && <div className="mb-2">{searchBox}</div>}
-      <div className="flex-1 rounded-md border">
-        <ScrollArea className="h-[300px]">
+      <div className="bg-background flex-1 rounded-md border">
+        <ScrollArea className="h-[420px]">
           <div className="space-y-1 p-2">
             {products.map((p) => (
               <div
                 key={p.pid}
                 onClick={() => onClick(p)}
                 className={cn(
-                  "group flex cursor-pointer items-center gap-2 rounded-md p-2 text-sm transition-colors",
+                  "group flex cursor-pointer items-start gap-3 rounded-md p-3 text-sm transition-colors",
                   "hover:bg-accent hover:text-accent-foreground",
+                  isSelected && "bg-primary/5",
                 )}
               >
-                <span className="flex-1">{p.name}</span>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="break-words font-medium">{p.name}</span>
+                    <span className="text-muted-foreground shrink-0 font-mono text-xs">
+                      PID {p.pid}
+                    </span>
+                  </div>
+                  <ProductMeta product={p} />
+                </div>
                 <span className="opacity-0 transition-opacity group-hover:opacity-100">
                   {isSelected ? (
                     <ChevronLeft className="size-4" />
@@ -177,5 +197,48 @@ function Column({
         </ScrollArea>
       </div>
     </div>
+  );
+}
+
+function ProductMeta({ product }: { product: Product }) {
+  const details = [
+    product.groupname,
+    product.type,
+    product.paytype,
+    product.gid ? `Group ${product.gid}` : "",
+  ].filter(Boolean);
+
+  if (details.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {details.map((detail) => (
+        <span
+          key={detail}
+          className="bg-muted text-muted-foreground rounded-sm px-1.5 py-0.5 text-[11px]"
+        >
+          {detail}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function SelectionSummary({ enabledIDs }: { enabledIDs: number[] }) {
+  if (enabledIDs.length === 0) {
+    return (
+      <p className="text-muted-foreground text-sm">
+        No products selected. Current backend behavior allows any WHMCS OAuth account.
+      </p>
+    );
+  }
+
+  return (
+    <p className="text-muted-foreground text-sm">
+      Saving {enabledIDs.length} selected product{enabledIDs.length === 1 ? "" : "s"}:
+      <span className="ml-1 font-mono">{enabledIDs.join(", ")}</span>
+    </p>
   );
 }

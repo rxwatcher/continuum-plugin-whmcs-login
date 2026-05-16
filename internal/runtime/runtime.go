@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"strings"
 	"sync"
 
@@ -27,6 +26,7 @@ type Config struct {
 	WHMCSServerURL       string
 	ClientID             string
 	ClientSecret         string
+	DisplayName          string
 	AllowedProductIDs    []string // parsed from comma-separated string
 	WHMCSAdminAPIID      string
 	WHMCSAdminAPISecret  string
@@ -98,6 +98,8 @@ func loadConfig(entries []*pluginv1.ConfigEntry) (Config, error) {
 			cfg.ClientID = stringFromMap(m)
 		case "client_secret":
 			cfg.ClientSecret = stringFromMap(m)
+		case "display_name":
+			cfg.DisplayName = stringFromMap(m)
 		case "allowed_product_ids":
 			raw := stringFromMap(m)
 			if raw != "" {
@@ -134,24 +136,9 @@ func loadConfig(entries []*pluginv1.ConfigEntry) (Config, error) {
 }
 
 func validate(cfg *Config) error {
-	if cfg.WHMCSServerURL == "" {
-		return fmt.Errorf("whmcs_server_url is required")
-	}
-	if _, err := url.Parse(cfg.WHMCSServerURL); err != nil {
-		return fmt.Errorf("whmcs_server_url is not a valid URL: %w", err)
-	}
-	if cfg.ClientID == "" {
-		return fmt.Errorf("client_id is required")
-	}
-	if cfg.ClientSecret == "" {
-		return fmt.Errorf("client_secret is required")
-	}
-	if len(cfg.AllowedProductIDs) > 0 && (cfg.WHMCSAdminAPIID == "" || cfg.WHMCSAdminAPISecret == "") {
-		return fmt.Errorf("whmcs_admin_api_id and whmcs_admin_api_secret are required when allowed_product_ids is set")
-	}
-	if cfg.FetchDiscordID && (cfg.WHMCSAdminAPIID == "" || cfg.WHMCSAdminAPISecret == "") {
-		return fmt.Errorf("whmcs_admin_api_id and whmcs_admin_api_secret are required when fetch_discord_id is true")
-	}
+	// Configure must not reject incomplete setup. The host calls Configure
+	// before forwarding the plugin admin SPA, so operational prerequisites are
+	// enforced by the auth/admin handlers that actually need them.
 	for i, m := range cfg.ClaimRoleMapping {
 		if m.ProductID == "" {
 			return fmt.Errorf("claim_role_mapping[%d]: product_id is required", i)

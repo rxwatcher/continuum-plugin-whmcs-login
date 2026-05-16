@@ -19,6 +19,7 @@ export default function Layout() {
 
   if (!ready) return null;
   const user = currentUser();
+  const embedded = new URLSearchParams(window.location.search).get("embedded") === "1";
 
   if (!user?.isAdmin) {
     return (
@@ -36,40 +37,60 @@ export default function Layout() {
 
   return (
     <div className="bg-background relative min-h-[100dvh] overflow-x-hidden">
-      <div className="from-primary/6 pointer-events-none fixed inset-x-0 top-0 z-0 h-40 bg-gradient-to-b to-transparent blur-3xl" />
+      {!embedded && (
+        <>
+          <div className="from-primary/6 pointer-events-none fixed inset-x-0 top-0 z-0 h-40 bg-gradient-to-b to-transparent blur-3xl" />
 
-      <header className="glass-dark border-border/70 sticky top-0 z-30 mx-3 mt-3 flex items-center justify-between rounded-2xl border px-4 py-3 sm:mx-6 lg:mx-8">
-        <div className="flex items-center gap-3">
-          <a
-            href={backToContinuumHref}
-            className="text-muted-foreground hover:bg-surface-hover hover:text-foreground inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors"
-            title="Back to Continuum plugins"
-          >
-            <ArrowLeft className="size-4" />
-            <span className="hidden sm:inline">Continuum</span>
-          </a>
-          <span className="text-border/60" aria-hidden>
-            /
-          </span>
-          <h1 className="text-base font-semibold tracking-tight">WHMCS Login</h1>
-        </div>
-        <nav className="flex items-center gap-1">
-          <NavTab to="/products" icon={<ListChecks className="size-4" />}>
-            Products
-          </NavTab>
-          <NavTab to="/settings" icon={<SettingsIcon className="size-4" />}>
-            Settings
-          </NavTab>
-        </nav>
-      </header>
+          <header className="glass-dark border-border/70 sticky top-0 z-30 mx-3 mt-3 flex items-center justify-between rounded-2xl border px-4 py-3 sm:mx-6 lg:mx-8">
+            <div className="flex items-center gap-3">
+              <a
+                href={backToContinuumHref}
+                className="text-muted-foreground hover:bg-surface-hover hover:text-foreground inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors"
+                title="Back to Continuum plugins"
+              >
+                <ArrowLeft className="size-4" />
+                <span className="hidden sm:inline">Continuum</span>
+              </a>
+              <span className="text-border/60" aria-hidden>
+                /
+              </span>
+              <h1 className="text-base font-semibold tracking-tight">WHMCS Login</h1>
+            </div>
+            <PluginNav />
+          </header>
+        </>
+      )}
+
+      {embedded && (
+        <header className="border-border/70 bg-background/95 sticky top-0 z-30 border-b px-5 py-3 backdrop-blur">
+          <PluginNav />
+        </header>
+      )}
 
       <main
         id="main-content"
-        className="relative z-10 mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8"
+        className={
+          embedded
+            ? "relative z-10 px-5 py-5"
+            : "relative z-10 mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8"
+        }
       >
         <Outlet />
       </main>
     </div>
+  );
+}
+
+function PluginNav() {
+  return (
+    <nav className="flex items-center gap-1">
+      <NavTab to="/products" icon={<ListChecks className="size-4" />}>
+        Products
+      </NavTab>
+      <NavTab to="/settings" icon={<SettingsIcon className="size-4" />}>
+        Settings
+      </NavTab>
+    </nav>
   );
 }
 
