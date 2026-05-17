@@ -8,6 +8,10 @@ Continuum roles.
 Use this plugin when WHMCS is your source of customer identity and entitlement.
 Use `continuum.oidc-login` when your identity provider supports standard OIDC.
 
+## Detailed Operations Docs
+
+- [Setup, debugging, and communication flows](docs/setup-debug-flows.md)
+
 ## Features
 
 - OAuth2/PKCE login against WHMCS OAuth endpoints.
