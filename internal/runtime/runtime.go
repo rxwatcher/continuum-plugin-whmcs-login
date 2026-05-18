@@ -7,6 +7,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -106,7 +109,11 @@ func loadConfig(entries []*pluginv1.ConfigEntry) (Config, error) {
 				for _, p := range strings.Split(raw, ",") {
 					p = strings.TrimSpace(p)
 					if p != "" {
-						cfg.AllowedProductIDs = append(cfg.AllowedProductIDs, p)
+						n, err := parsePositiveID(p)
+						if err != nil {
+							return Config{}, fmt.Errorf("allowed_product_ids: %w", err)
+						}
+						cfg.AllowedProductIDs = append(cfg.AllowedProductIDs, strconv.Itoa(n))
 					}
 				}
 			}
@@ -139,15 +146,59 @@ func validate(cfg *Config) error {
 	// Configure must not reject incomplete setup. The host calls Configure
 	// before forwarding the plugin admin SPA, so operational prerequisites are
 	// enforced by the auth/admin handlers that actually need them.
-	for i, m := range cfg.ClaimRoleMapping {
-		if m.ProductID == "" {
-			return fmt.Errorf("claim_role_mapping[%d]: product_id is required", i)
+	if cfg.WHMCSServerURL != "" {
+		if err := validateServerURL(cfg.WHMCSServerURL); err != nil {
+			return err
 		}
+	}
+	for i, m := range cfg.ClaimRoleMapping {
+		n, err := parsePositiveID(m.ProductID)
+		if err != nil {
+			return fmt.Errorf("claim_role_mapping[%d]: product_id: %w", i, err)
+		}
+		cfg.ClaimRoleMapping[i].ProductID = strconv.Itoa(n)
 		if m.Role != "user" && m.Role != "admin" {
 			return fmt.Errorf("claim_role_mapping[%d]: role must be 'user' or 'admin', got %q", i, m.Role)
 		}
 	}
 	return nil
+}
+
+func validateServerURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("whmcs_server_url is not a valid URL: %w", err)
+	}
+	if u.Scheme != "https" && u.Scheme != "http" {
+		return fmt.Errorf("whmcs_server_url scheme must be http or https")
+	}
+	if u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return fmt.Errorf("whmcs_server_url must be an origin URL without credentials, query, or fragment")
+	}
+	if u.Scheme == "http" && !isLocalhost(u.Hostname()) {
+		return fmt.Errorf("whmcs_server_url must use https except for localhost")
+	}
+	return nil
+}
+
+func isLocalhost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func parsePositiveID(raw string) (int, error) {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return 0, fmt.Errorf("is required")
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n <= 0 {
+		return 0, fmt.Errorf("must be a positive integer")
+	}
+	return n, nil
 }
 
 func stringFromMap(m map[string]any) string {

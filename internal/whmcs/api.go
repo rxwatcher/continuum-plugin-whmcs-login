@@ -88,41 +88,69 @@ type rawProduct struct {
 	Status    *string         `json:"status,omitempty"`
 }
 
-func (r rawProduct) toProduct() Product {
+func (r rawProduct) toProduct() (Product, error) {
+	pid, err := parseRequiredPositiveInt(r.PID)
+	if err != nil {
+		return Product{}, fmt.Errorf("pid: %w", err)
+	}
+	gid, err := parseOptionalInt(r.GID)
+	if err != nil {
+		return Product{}, fmt.Errorf("gid: %w", err)
+	}
 	return Product{
-		PID:       parseRawInt(r.PID),
-		GID:       parseRawInt(r.GID),
+		PID:       pid,
+		GID:       gid,
 		Name:      r.Name,
 		Type:      r.Type,
 		PayType:   r.PayType,
 		GroupName: r.GroupName,
-	}
+	}, nil
 }
 
-func (r rawProduct) toClientProduct() ClientProduct {
+func (r rawProduct) toClientProduct() (ClientProduct, error) {
+	pid, err := parseRequiredPositiveInt(r.PID)
+	if err != nil {
+		return ClientProduct{}, fmt.Errorf("pid: %w", err)
+	}
 	return ClientProduct{
-		PID:    parseRawInt(r.PID),
+		PID:    pid,
 		Name:   r.Name,
 		Status: r.Status,
-	}
+	}, nil
 }
 
-func parseRawInt(b json.RawMessage) int {
+func parseOptionalInt(b json.RawMessage) (int, error) {
 	if len(b) == 0 {
-		return 0
+		return 0, nil
 	}
-	// Try direct int.
 	var n int
 	if err := json.Unmarshal(b, &n); err == nil {
-		return n
+		return n, nil
 	}
-	// Try string-wrapped int.
 	var s string
 	if err := json.Unmarshal(b, &s); err == nil {
-		n, _ = strconv.Atoi(s)
-		return n
+		s = strings.TrimSpace(s)
+		if s == "" {
+			return 0, nil
+		}
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			return 0, err
+		}
+		return n, nil
 	}
-	return 0
+	return 0, fmt.Errorf("not an integer")
+}
+
+func parseRequiredPositiveInt(b json.RawMessage) (int, error) {
+	n, err := parseOptionalInt(b)
+	if err != nil {
+		return 0, err
+	}
+	if n <= 0 {
+		return 0, fmt.Errorf("must be a positive integer")
+	}
+	return n, nil
 }
 
 // post issues a POST to /includes/api.php with the supplied action + extras.
@@ -186,8 +214,12 @@ func (c *APIClient) GetProducts(ctx context.Context) ([]Product, error) {
 		return nil, err
 	}
 	out := make([]Product, 0, len(raws))
-	for _, r := range raws {
-		out = append(out, r.toProduct())
+	for i, r := range raws {
+		p, err := r.toProduct()
+		if err != nil {
+			return nil, fmt.Errorf("product[%d]: %w", i, err)
+		}
+		out = append(out, p)
 	}
 	return out, nil
 }
@@ -247,8 +279,12 @@ func (c *APIClient) GetClientsProducts(ctx context.Context, clientID string) ([]
 		return nil, err
 	}
 	out := make([]ClientProduct, 0, len(raws))
-	for _, r := range raws {
-		out = append(out, r.toClientProduct())
+	for i, r := range raws {
+		p, err := r.toClientProduct()
+		if err != nil {
+			return nil, fmt.Errorf("product[%d]: %w", i, err)
+		}
+		out = append(out, p)
 	}
 	return out, nil
 }
@@ -273,7 +309,10 @@ func extractProductArray(body []byte) ([]rawProduct, error) {
 	}
 	var asEmptyArr []any
 	if err := json.Unmarshal(env.Products, &asEmptyArr); err == nil {
-		return nil, nil
+		if len(asEmptyArr) == 0 {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("unexpected products array envelope")
 	}
 	var wrapper struct {
 		Product json.RawMessage `json:"product"`

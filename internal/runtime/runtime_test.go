@@ -90,6 +90,33 @@ func TestLoadConfig_AllowedProductsParsedFromCSV(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_RejectsInvalidServerURL(t *testing.T) {
+	cases := map[string]string{
+		"relative":      "/billing",
+		"credentials":   "https://user:pass@billing.example",
+		"query":         "https://billing.example?x=1",
+		"insecure host": "http://billing.example",
+	}
+	for name, raw := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := loadConfig([]*pluginv1.ConfigEntry{entry(t, "whmcs_server_url", raw)})
+			if err == nil {
+				t.Fatalf("expected error for %q", raw)
+			}
+		})
+	}
+}
+
+func TestLoadConfig_AllowsHTTPOnlyForLocalhost(t *testing.T) {
+	cfg, err := loadConfig([]*pluginv1.ConfigEntry{entry(t, "whmcs_server_url", "http://localhost:8080")})
+	if err != nil {
+		t.Fatalf("loadConfig: %v", err)
+	}
+	if cfg.WHMCSServerURL != "http://localhost:8080" {
+		t.Errorf("WHMCSServerURL = %q", cfg.WHMCSServerURL)
+	}
+}
+
 func TestLoadConfig_AllowedProductsRequireAdminAPI(t *testing.T) {
 	entries := []*pluginv1.ConfigEntry{
 		entry(t, "whmcs_server_url", "https://x"),
@@ -147,5 +174,35 @@ func TestLoadConfig_ClaimRoleMapping_RejectsInvalidRole(t *testing.T) {
 	}
 	if _, err := loadConfig(entries); err == nil {
 		t.Error("expected error for invalid role")
+	}
+}
+
+func TestLoadConfig_ClaimRoleMapping_NormalizesProductID(t *testing.T) {
+	cfg, err := loadConfig([]*pluginv1.ConfigEntry{
+		entryWithRaw(t, "claim_role_mapping", []any{
+			map[string]any{"product_id": "005", "role": "admin"},
+		}),
+	})
+	if err != nil {
+		t.Fatalf("loadConfig: %v", err)
+	}
+	if cfg.ClaimRoleMapping[0].ProductID != "5" {
+		t.Errorf("product_id = %q, want 5", cfg.ClaimRoleMapping[0].ProductID)
+	}
+}
+
+func TestLoadConfig_RejectsInvalidProductIDs(t *testing.T) {
+	cases := map[string][]*pluginv1.ConfigEntry{
+		"allowed": {entry(t, "allowed_product_ids", "1,nope")},
+		"mapping": {entryWithRaw(t, "claim_role_mapping", []any{
+			map[string]any{"product_id": "0", "role": "admin"},
+		})},
+	}
+	for name, entries := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := loadConfig(entries); err == nil {
+				t.Fatal("expected error")
+			}
+		})
 	}
 }

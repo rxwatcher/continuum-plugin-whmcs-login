@@ -25,6 +25,11 @@ func TestActiveProductIDs(t *testing.T) {
 			expected: []string{"1"},
 		},
 		{
+			name:     "active is trimmed and case-insensitive",
+			input:    []whmcs.ClientProduct{{PID: 8, Status: ptr(" active ")}},
+			expected: []string{"8"},
+		},
+		{
 			name:     "nil status (legacy WHMCS — field omitted)",
 			input:    []whmcs.ClientProduct{{PID: 2, Status: nil}},
 			expected: []string{"2"},

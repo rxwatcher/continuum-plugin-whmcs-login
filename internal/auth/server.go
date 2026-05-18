@@ -6,7 +6,9 @@ package auth
 
 import (
 	"context"
+	"crypto/subtle"
 	"strconv"
+	"strings"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -53,7 +55,10 @@ func (s *Server) InitAuthorize(_ context.Context, req *pluginv1.InitAuthorizeReq
 	if cfg.WHMCSServerURL == "" || cfg.ClientID == "" {
 		return nil, status.Error(codes.FailedPrecondition, "plugin not configured")
 	}
-	verifier, challenge := whmcs.GeneratePKCE()
+	verifier, challenge, err := whmcs.GeneratePKCE()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "entropy: %v", err)
+	}
 	authorizeURL := whmcs.BuildAuthorizeURL(whmcs.AuthorizeParams{
 		ServerURL:           cfg.WHMCSServerURL,
 		ClientID:            cfg.ClientID,
@@ -62,7 +67,10 @@ func (s *Server) InitAuthorize(_ context.Context, req *pluginv1.InitAuthorizeReq
 		CodeChallenge:       challenge,
 		CodeChallengeMethod: "S256",
 	})
-	pState, err := structpb.NewStruct(map[string]any{"pkce_verifier": verifier})
+	pState, err := structpb.NewStruct(map[string]any{
+		"pkce_verifier": verifier,
+		"state":         req.GetState(),
+	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "encode provider_state: %v", err)
 	}
@@ -84,8 +92,12 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 
 	pState := req.GetProviderState().AsMap()
 	verifier, _ := pState["pkce_verifier"].(string)
+	expectedState, _ := pState["state"].(string)
 	if verifier == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing pkce_verifier in provider_state")
+	}
+	if expectedState != "" && subtle.ConstantTimeCompare([]byte(req.GetState()), []byte(expectedState)) != 1 {
+		return nil, status.Error(codes.Unauthenticated, "state mismatch")
 	}
 
 	tok, err := whmcs.ExchangeCode(ctx, whmcs.ExchangeParams{
@@ -187,7 +199,8 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 //
 // Treated as active:
 //   - Status == nil (WHMCS omitted the field — legacy compat).
-//   - Status != nil && *Status == "Active".
+//   - Status != nil && strings.TrimSpace(*Status) case-insensitively equals
+//     "Active".
 //
 // Treated as inactive (and excluded from gating):
 //   - Status != nil && *Status == ""  — WHMCS explicitly returned empty,
@@ -199,7 +212,7 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 func activeProductIDs(prods []whmcs.ClientProduct) []string {
 	out := make([]string, 0, len(prods))
 	for _, p := range prods {
-		if p.Status == nil || *p.Status == "Active" {
+		if p.Status == nil || strings.EqualFold(strings.TrimSpace(*p.Status), "Active") {
 			out = append(out, strconv.Itoa(p.PID))
 		}
 	}

@@ -26,7 +26,7 @@ Use `continuum.oidc-login` when your identity provider supports standard OIDC.
 
 | Key | Required | Description |
 |---|---|---|
-| `whmcs_server_url` | yes | WHMCS base URL, no trailing slash. |
+| `whmcs_server_url` | yes | WHMCS base URL, no trailing slash. HTTPS is required except for localhost testing. |
 | `client_id` | yes | WHMCS OAuth client ID. |
 | `client_secret` | yes | WHMCS OAuth client secret. |
 | `display_name` | no | Login-button label. |

@@ -62,6 +62,9 @@ func TestInitAuthorize_BuildsURLWithPKCE(t *testing.T) {
 	if verifier == "" {
 		t.Errorf("provider_state missing pkce_verifier: %v", ps)
 	}
+	if ps["state"] != "state-1" {
+		t.Errorf("provider_state state = %v", ps["state"])
+	}
 }
 
 func TestInitAuthorize_RejectsUnconfigured(t *testing.T) {
@@ -74,6 +77,24 @@ func TestInitAuthorize_RejectsUnconfigured(t *testing.T) {
 	}
 	if status.Code(err) != codes.FailedPrecondition {
 		t.Errorf("code = %v, want FailedPrecondition", status.Code(err))
+	}
+}
+
+func TestExchangeCode_RejectsStateMismatch(t *testing.T) {
+	s := newAuthServer(pluginrt.Config{
+		WHMCSServerURL: "https://x", ClientID: "c", ClientSecret: "s",
+	})
+	_, err := s.ExchangeCode(context.Background(), &pluginv1.ExchangeCodeRequest{
+		Code:        "x",
+		State:       "wrong",
+		RedirectUri: "/cb",
+		ProviderState: mustStruct(t, map[string]any{
+			"pkce_verifier": "v",
+			"state":         "expected",
+		}),
+	})
+	if status.Code(err) != codes.Unauthenticated {
+		t.Errorf("code = %v, want Unauthenticated; err = %v", status.Code(err), err)
 	}
 }
 

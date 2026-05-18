@@ -30,13 +30,15 @@ const maxResponseBytes = 10 << 20 // 10 MiB
 // GeneratePKCE returns a 64-char URL-safe verifier + its S256 challenge.
 // The verifier conforms to RFC 7636 §4.1 (43..128 chars); the challenge is
 // the base64url(SHA256(verifier)).
-func GeneratePKCE() (verifier, challenge string) {
+func GeneratePKCE() (verifier, challenge string, err error) {
 	b := make([]byte, 48)
-	_, _ = rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", "", err
+	}
 	verifier = base64.RawURLEncoding.EncodeToString(b)
 	sum := sha256.Sum256([]byte(verifier))
 	challenge = base64.RawURLEncoding.EncodeToString(sum[:])
-	return verifier, challenge
+	return verifier, challenge, nil
 }
 
 // AuthorizeParams describes the inputs for the authorization-code request URL.
@@ -127,6 +129,14 @@ func ExchangeCode(ctx context.Context, p ExchangeParams) (TokenResponse, error) 
 	if err := json.Unmarshal(body, &tok); err != nil {
 		return TokenResponse{}, fmt.Errorf("decode token response: %w", err)
 	}
+	tok.AccessToken = strings.TrimSpace(tok.AccessToken)
+	tok.TokenType = strings.TrimSpace(tok.TokenType)
+	if tok.AccessToken == "" {
+		return TokenResponse{}, fmt.Errorf("token response missing access_token")
+	}
+	if tok.TokenType != "" && !strings.EqualFold(tok.TokenType, "Bearer") {
+		return TokenResponse{}, fmt.Errorf("unsupported token_type %q", tok.TokenType)
+	}
 	return tok, nil
 }
 
@@ -168,29 +178,10 @@ func FetchUserInfo(ctx context.Context, serverURL, accessToken string) (UserInfo
 	if err := json.Unmarshal(body, &ui); err != nil {
 		return UserInfo{}, fmt.Errorf("decode userinfo: %w", err)
 	}
+	ui.ID = strings.TrimSpace(ui.ID)
+	ui.Email = strings.TrimSpace(ui.Email)
+	if ui.ID == "" {
+		return UserInfo{}, fmt.Errorf("userinfo response missing id")
+	}
 	return ui, nil
-}
-
-// DecodeIDToken splits the JWT and base64-decodes the body. The signature is
-// NOT verified — v1 trusts the TLS connection to the token endpoint, which is
-// parity with the librarymanagerre reference implementation. Returns the
-// claims map.
-func DecodeIDToken(idToken string) (map[string]any, error) {
-	parts := strings.Split(idToken, ".")
-	if len(parts) < 2 {
-		return nil, fmt.Errorf("malformed id_token: expected at least 2 segments")
-	}
-	body, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		// Tolerate standard padding too — some issuers add it.
-		body, err = base64.URLEncoding.DecodeString(parts[1])
-		if err != nil {
-			return nil, fmt.Errorf("decode id_token body: %w", err)
-		}
-	}
-	var claims map[string]any
-	if err := json.Unmarshal(body, &claims); err != nil {
-		return nil, fmt.Errorf("unmarshal id_token claims: %w", err)
-	}
-	return claims, nil
 }

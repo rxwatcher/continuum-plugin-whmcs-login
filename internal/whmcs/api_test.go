@@ -59,6 +59,19 @@ func TestGetProducts_StringPID(t *testing.T) {
 	}
 }
 
+func TestGetProducts_RejectsMalformedPID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"result":"success","products":{"product":[{"pid":"not-a-number","name":"Bad"}]}}`))
+	}))
+	defer srv.Close()
+
+	c := whmcs.NewAPIClient(srv.URL, "id", "sec")
+	_, err := c.GetProducts(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "pid") {
+		t.Fatalf("expected pid parse error, got %v", err)
+	}
+}
+
 func TestGetProducts_EmptyEnvelope(t *testing.T) {
 	// WHMCS returns the empty string for products when there are none.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -135,6 +148,32 @@ func TestGetClientsProducts_SingleObjectForm(t *testing.T) {
 	}
 	if len(prods) != 1 || prods[0].PID != 9 {
 		t.Errorf("prods = %+v", prods)
+	}
+}
+
+func TestGetClientsProducts_RejectsZeroPID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"result":"success","products":{"product":[{"pid":0,"name":"Bad","status":"Active"}]}}`))
+	}))
+	defer srv.Close()
+
+	c := whmcs.NewAPIClient(srv.URL, "id", "sec")
+	_, err := c.GetClientsProducts(context.Background(), "42")
+	if err == nil || !strings.Contains(err.Error(), "positive integer") {
+		t.Fatalf("expected positive integer error, got %v", err)
+	}
+}
+
+func TestGetClientsProducts_RejectsUnexpectedArrayEnvelope(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"result":"success","products":[{"pid":5,"name":"Bad","status":"Active"}]}`))
+	}))
+	defer srv.Close()
+
+	c := whmcs.NewAPIClient(srv.URL, "id", "sec")
+	_, err := c.GetClientsProducts(context.Background(), "42")
+	if err == nil || !strings.Contains(err.Error(), "unexpected products array") {
+		t.Fatalf("expected unexpected products array error, got %v", err)
 	}
 }
 

@@ -2,8 +2,6 @@ package whmcs_test
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,7 +12,10 @@ import (
 )
 
 func TestPKCE_GeneratesValidVerifierAndChallenge(t *testing.T) {
-	v, c := whmcs.GeneratePKCE()
+	v, c, err := whmcs.GeneratePKCE()
+	if err != nil {
+		t.Fatalf("GeneratePKCE: %v", err)
+	}
 	if len(v) < 43 || len(v) > 128 {
 		t.Errorf("verifier len = %d (expected 43..128)", len(v))
 	}
@@ -28,10 +29,44 @@ func TestPKCE_GeneratesValidVerifierAndChallenge(t *testing.T) {
 }
 
 func TestPKCE_Unique(t *testing.T) {
-	v1, _ := whmcs.GeneratePKCE()
-	v2, _ := whmcs.GeneratePKCE()
+	v1, _, err := whmcs.GeneratePKCE()
+	if err != nil {
+		t.Fatalf("GeneratePKCE #1: %v", err)
+	}
+	v2, _, err := whmcs.GeneratePKCE()
+	if err != nil {
+		t.Fatalf("GeneratePKCE #2: %v", err)
+	}
 	if v1 == v2 {
 		t.Errorf("two calls returned same verifier")
+	}
+}
+
+func TestExchangeCode_RejectsMissingAccessToken(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id_token":"a.b.c","token_type":"Bearer","expires_in":3600}`))
+	}))
+	defer srv.Close()
+
+	_, err := whmcs.ExchangeCode(context.Background(), whmcs.ExchangeParams{
+		ServerURL: srv.URL, ClientID: "c", ClientSecret: "s", Code: "x", RedirectURI: "/cb", CodeVerifier: "v",
+	})
+	if err == nil || !strings.Contains(err.Error(), "access_token") {
+		t.Fatalf("expected missing access_token error, got %v", err)
+	}
+}
+
+func TestExchangeCode_RejectsNonBearerTokenType(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"access_token":"AT","token_type":"mac","expires_in":3600}`))
+	}))
+	defer srv.Close()
+
+	_, err := whmcs.ExchangeCode(context.Background(), whmcs.ExchangeParams{
+		ServerURL: srv.URL, ClientID: "c", ClientSecret: "s", Code: "x", RedirectURI: "/cb", CodeVerifier: "v",
+	})
+	if err == nil || !strings.Contains(err.Error(), "token_type") {
+		t.Fatalf("expected token_type error, got %v", err)
 	}
 }
 
@@ -69,6 +104,18 @@ func TestBuildAuthorizeURL(t *testing.T) {
 	}
 	if q.Get("redirect_uri") != "https://app.example/cb" {
 		t.Errorf("redirect_uri = %q", q.Get("redirect_uri"))
+	}
+}
+
+func TestFetchUserInfo_RejectsMissingID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"email":"u@x.com","name":"User"}`))
+	}))
+	defer srv.Close()
+
+	_, err := whmcs.FetchUserInfo(context.Background(), srv.URL, "AT")
+	if err == nil || !strings.Contains(err.Error(), "missing id") {
+		t.Fatalf("expected missing id error, got %v", err)
 	}
 }
 
@@ -116,8 +163,8 @@ func TestExchangeCode_PostsCorrectFormAndDecodesTokens(t *testing.T) {
 	defer srv.Close()
 
 	tok, err := whmcs.ExchangeCode(context.Background(), whmcs.ExchangeParams{
-		ServerURL:    srv.URL,
-		ClientID:     "c", ClientSecret: "s",
+		ServerURL: srv.URL,
+		ClientID:  "c", ClientSecret: "s",
 		Code:         "auth-code",
 		RedirectURI:  "https://app/cb",
 		CodeVerifier: "verifier-x",
@@ -167,26 +214,17 @@ func TestFetchUserInfo_AttachesBearerAndDecodes(t *testing.T) {
 	}
 }
 
-func TestDecodeIDToken_ExtractsBodyClaims(t *testing.T) {
-	body := map[string]any{"sub": "42", "email": "u@x.com", "name": "User"}
-	bodyJSON, _ := json.Marshal(body)
-	parts := []string{
-		base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none"}`)),
-		base64.RawURLEncoding.EncodeToString(bodyJSON),
-		"sig",
-	}
-	tok := strings.Join(parts, ".")
-	claims, err := whmcs.DecodeIDToken(tok)
-	if err != nil {
-		t.Fatalf("DecodeIDToken: %v", err)
-	}
-	if claims["sub"] != "42" || claims["email"] != "u@x.com" {
-		t.Errorf("claims = %v", claims)
-	}
-}
+func TestFetchUserInfo_TrimsIdentityFields(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":" 42 ","email":" u@x.com ","name":"User"}`))
+	}))
+	defer srv.Close()
 
-func TestDecodeIDToken_RejectsMalformed(t *testing.T) {
-	if _, err := whmcs.DecodeIDToken("notajwt"); err == nil {
-		t.Error("expected error for malformed token")
+	ui, err := whmcs.FetchUserInfo(context.Background(), srv.URL, "AT")
+	if err != nil {
+		t.Fatalf("FetchUserInfo: %v", err)
+	}
+	if ui.ID != "42" || ui.Email != "u@x.com" {
+		t.Fatalf("ui = %+v", ui)
 	}
 }
