@@ -3,6 +3,12 @@
   "version": "1.0.0",
   "checksum": "__CHECKSUM__",
   "continuum_api_version": "v1",
+  "supported_platforms": [
+    {
+      "os": "linux",
+      "arch": "amd64"
+    }
+  ],
   "capabilities": [
     {
       "type": "auth_provider.v1",
