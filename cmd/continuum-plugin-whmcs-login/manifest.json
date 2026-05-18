@@ -1,6 +1,6 @@
 {
   "plugin_id": "continuum.whmcs-login",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "checksum": "__CHECKSUM__",
   "continuum_api_version": "v1",
   "capabilities": [
@@ -9,7 +9,9 @@
       "id": "whmcs",
       "display_name": "Sign in with WHMCS",
       "description": "OAuth/OIDC auth against a WHMCS billing system.",
-      "auth_modes": ["oauth2"],
+      "auth_modes": [
+        "oauth2"
+      ],
       "icon_url": "/assets/whmcs-logo.svg"
     },
     {
@@ -20,10 +22,33 @@
     }
   ],
   "http_routes": [
-    {"id": "assets", "method": "GET", "path": "/assets/*", "access": "public"},
-    {"id": "admin_html", "method": "GET", "path": "/admin/*", "access": "admin", "navigable": true, "navigation_label": "WHMCS Login", "navigation_kind": "admin"},
-    {"id": "admin_api", "method": "*", "path": "/api/v1/admin/*", "access": "admin"},
-    {"id": "health", "method": "GET", "path": "/api/v1/health", "access": "public"}
+    {
+      "id": "assets",
+      "method": "GET",
+      "path": "/assets/*",
+      "access": "public"
+    },
+    {
+      "id": "admin_html",
+      "method": "GET",
+      "path": "/admin/*",
+      "access": "admin",
+      "navigable": true,
+      "navigation_label": "WHMCS Login",
+      "navigation_kind": "admin"
+    },
+    {
+      "id": "admin_api",
+      "method": "*",
+      "path": "/api/v1/admin/*",
+      "access": "admin"
+    },
+    {
+      "id": "health",
+      "method": "GET",
+      "path": "/api/v1/health",
+      "access": "public"
+    }
   ],
   "global_config_schema": [
     {
@@ -34,7 +59,12 @@
       "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}},\"required\":[\"value\"]}",
       "admin_form": {
         "fields": [
-          {"key": "value", "label": "URL", "control": "ADMIN_FORM_CONTROL_TEXT", "required": true}
+          {
+            "key": "value",
+            "label": "URL",
+            "control": "ADMIN_FORM_CONTROL_TEXT",
+            "required": true
+          }
         ]
       }
     },
@@ -45,7 +75,12 @@
       "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}},\"required\":[\"value\"]}",
       "admin_form": {
         "fields": [
-          {"key": "value", "label": "Client ID", "control": "ADMIN_FORM_CONTROL_TEXT", "required": true}
+          {
+            "key": "value",
+            "label": "Client ID",
+            "control": "ADMIN_FORM_CONTROL_TEXT",
+            "required": true
+          }
         ]
       }
     },
@@ -56,7 +91,13 @@
       "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}},\"required\":[\"value\"]}",
       "admin_form": {
         "fields": [
-          {"key": "value", "label": "Client secret", "control": "ADMIN_FORM_CONTROL_PASSWORD", "required": true, "secret": true}
+          {
+            "key": "value",
+            "label": "Client secret",
+            "control": "ADMIN_FORM_CONTROL_PASSWORD",
+            "required": true,
+            "secret": true
+          }
         ]
       }
     },
@@ -67,7 +108,11 @@
       "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}}}",
       "admin_form": {
         "fields": [
-          {"key": "value", "label": "Button label", "control": "ADMIN_FORM_CONTROL_TEXT"}
+          {
+            "key": "value",
+            "label": "Button label",
+            "control": "ADMIN_FORM_CONTROL_TEXT"
+          }
         ]
       }
     },
@@ -78,7 +123,11 @@
       "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}}}",
       "admin_form": {
         "fields": [
-          {"key": "value", "label": "Product IDs", "control": "ADMIN_FORM_CONTROL_TEXT"}
+          {
+            "key": "value",
+            "label": "Product IDs",
+            "control": "ADMIN_FORM_CONTROL_TEXT"
+          }
         ]
       }
     },
@@ -89,7 +138,11 @@
       "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}}}",
       "admin_form": {
         "fields": [
-          {"key": "value", "label": "API id", "control": "ADMIN_FORM_CONTROL_TEXT"}
+          {
+            "key": "value",
+            "label": "API id",
+            "control": "ADMIN_FORM_CONTROL_TEXT"
+          }
         ]
       }
     },
@@ -99,7 +152,12 @@
       "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}}}",
       "admin_form": {
         "fields": [
-          {"key": "value", "label": "API secret", "control": "ADMIN_FORM_CONTROL_PASSWORD", "secret": true}
+          {
+            "key": "value",
+            "label": "API secret",
+            "control": "ADMIN_FORM_CONTROL_PASSWORD",
+            "secret": true
+          }
         ]
       }
     },
@@ -110,7 +168,11 @@
       "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"boolean\"}}}",
       "admin_form": {
         "fields": [
-          {"key": "value", "label": "Enable", "control": "ADMIN_FORM_CONTROL_CHECKBOX"}
+          {
+            "key": "value",
+            "label": "Enable",
+            "control": "ADMIN_FORM_CONTROL_CHECKBOX"
+          }
         ]
       }
     },
@@ -121,7 +183,11 @@
       "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}}}",
       "admin_form": {
         "fields": [
-          {"key": "value", "label": "Field name", "control": "ADMIN_FORM_CONTROL_TEXT"}
+          {
+            "key": "value",
+            "label": "Field name",
+            "control": "ADMIN_FORM_CONTROL_TEXT"
+          }
         ]
       }
     },
@@ -132,7 +198,11 @@
       "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"array\"}}}",
       "admin_form": {
         "fields": [
-          {"key": "value", "label": "Role mapping (JSON array)", "control": "ADMIN_FORM_CONTROL_TEXT"}
+          {
+            "key": "value",
+            "label": "Role mapping (JSON array)",
+            "control": "ADMIN_FORM_CONTROL_TEXT"
+          }
         ]
       }
     }
