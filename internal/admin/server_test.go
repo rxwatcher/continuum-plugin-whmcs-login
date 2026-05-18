@@ -116,14 +116,27 @@ func TestProductsRefresh_RefetchesCache(t *testing.T) {
 	}
 }
 
-func TestProducts_NoCacheReturns503(t *testing.T) {
+func TestProducts_NoCacheReturnsSetupPayload(t *testing.T) {
 	a := admin.NewServer(admin.Deps{ConfigFn: func() pluginrt.Config { return pluginrt.Config{} }})
 	r := httptest.NewRequest("GET", "/api/v1/admin/products", nil)
 	r.Header.Set("X-Continuum-User-Role", "admin")
 	w := httptest.NewRecorder()
 	mountRouter(a).ServeHTTP(w, r)
-	if w.Code != http.StatusServiceUnavailable {
-		t.Errorf("code = %d, want 503", w.Code)
+	if w.Code != http.StatusOK {
+		t.Errorf("code = %d, want 200", w.Code)
+	}
+	var body struct {
+		Products   []whmcs.Product `json:"products"`
+		Configured bool            `json:"configured"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Configured {
+		t.Error("configured = true, want false")
+	}
+	if len(body.Products) != 0 {
+		t.Errorf("products len = %d, want 0", len(body.Products))
 	}
 }
 

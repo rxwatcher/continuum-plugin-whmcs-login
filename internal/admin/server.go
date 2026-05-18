@@ -53,11 +53,17 @@ func (s *Server) HandleWhoami(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// HandleProducts returns the WHMCS product list (cached for 5 minutes).
-// 503 if the admin API credentials are not configured.
+// HandleProducts returns the WHMCS product list (cached for 5 minutes). When
+// admin API credentials are not configured yet, return an empty non-error
+// payload so the admin SPA can render setup guidance without throwing a 5xx.
 func (s *Server) HandleProducts(w http.ResponseWriter, r *http.Request) {
 	if s.deps.ProductCache == nil {
-		http.Error(w, "product cache not configured (admin API credentials missing?)", http.StatusServiceUnavailable)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"products":   []whmcs.Product{},
+			"cached_at":  "",
+			"configured": false,
+			"message":    "WHMCS admin API credentials are required before products can be fetched.",
+		})
 		return
 	}
 	prods, err := s.deps.ProductCache.Get(r.Context())
@@ -75,7 +81,12 @@ func (s *Server) HandleProducts(w http.ResponseWriter, r *http.Request) {
 // returns the result.
 func (s *Server) HandleProductsRefresh(w http.ResponseWriter, r *http.Request) {
 	if s.deps.ProductCache == nil {
-		http.Error(w, "product cache not configured", http.StatusServiceUnavailable)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"products":   []whmcs.Product{},
+			"cached_at":  "",
+			"configured": false,
+			"message":    "WHMCS admin API credentials are required before products can be fetched.",
+		})
 		return
 	}
 	prods, err := s.deps.ProductCache.Refresh(r.Context())
