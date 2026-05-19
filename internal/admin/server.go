@@ -6,9 +6,11 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	pluginrt "github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/runtime"
 	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/whmcs"
@@ -16,8 +18,9 @@ import (
 
 // Deps is the wiring this package needs from main.go.
 type Deps struct {
-	ConfigFn     func() pluginrt.Config
-	ProductCache *whmcs.ProductCache // nil when admin API creds are not configured
+	ConfigFn       func() pluginrt.Config
+	ProductCacheFn func() *whmcs.ProductCache // nil when admin API creds are not configured
+	UpdateConfigFn func(context.Context, pluginrt.Config) error
 }
 
 // Server holds the wired deps and exposes individual handler funcs +
@@ -57,7 +60,8 @@ func (s *Server) HandleWhoami(w http.ResponseWriter, r *http.Request) {
 // admin API credentials are not configured yet, return an empty non-error
 // payload so the admin SPA can render setup guidance without throwing a 5xx.
 func (s *Server) HandleProducts(w http.ResponseWriter, r *http.Request) {
-	if s.deps.ProductCache == nil {
+	cache := s.productCache()
+	if cache == nil {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"products":   []whmcs.Product{},
 			"cached_at":  "",
@@ -66,21 +70,22 @@ func (s *Server) HandleProducts(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	prods, err := s.deps.ProductCache.Get(r.Context())
+	prods, err := cache.Get(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"products":  prods,
-		"cached_at": s.deps.ProductCache.CachedAt(),
+		"cached_at": cache.CachedAt(),
 	})
 }
 
 // HandleProductsRefresh forces a re-fetch of the WHMCS product list and
 // returns the result.
 func (s *Server) HandleProductsRefresh(w http.ResponseWriter, r *http.Request) {
-	if s.deps.ProductCache == nil {
+	cache := s.productCache()
+	if cache == nil {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"products":   []whmcs.Product{},
 			"cached_at":  "",
@@ -89,15 +94,22 @@ func (s *Server) HandleProductsRefresh(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	prods, err := s.deps.ProductCache.Refresh(r.Context())
+	prods, err := cache.Refresh(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"products":  prods,
-		"cached_at": s.deps.ProductCache.CachedAt(),
+		"cached_at": cache.CachedAt(),
 	})
+}
+
+func (s *Server) productCache() *whmcs.ProductCache {
+	if s.deps.ProductCacheFn == nil {
+		return nil
+	}
+	return s.deps.ProductCacheFn()
 }
 
 // HandleConfigSummary returns a redacted projection of the live in-process
@@ -123,6 +135,69 @@ func (s *Server) HandleConfigSummary(w http.ResponseWriter, _ *http.Request) {
 		"fetch_discord_id":           cfg.FetchDiscordID,
 		"discord_id_custom_field":    cfg.DiscordIDCustomField,
 	})
+}
+
+func (s *Server) HandleUpdateConfig(w http.ResponseWriter, r *http.Request) {
+	if s.deps.UpdateConfigFn == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "config store unavailable"})
+		return
+	}
+	cur := s.deps.ConfigFn()
+	var req struct {
+		WHMCSServerURL       *string                  `json:"whmcs_server_url"`
+		ClientID             *string                  `json:"client_id"`
+		ClientSecret         *string                  `json:"client_secret"`
+		DisplayName          *string                  `json:"display_name"`
+		AllowedProductIDs    *[]int                   `json:"allowed_product_ids"`
+		WHMCSAdminAPIID      *string                  `json:"whmcs_admin_api_id"`
+		WHMCSAdminAPISecret  *string                  `json:"whmcs_admin_api_secret"`
+		FetchDiscordID       *bool                    `json:"fetch_discord_id"`
+		DiscordIDCustomField *string                  `json:"discord_id_custom_field"`
+		ClaimRoleMapping     *[]pluginrt.ClaimRoleMap `json:"claim_role_mapping"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid JSON body"})
+		return
+	}
+	if req.WHMCSServerURL != nil {
+		cur.WHMCSServerURL = strings.TrimRight(strings.TrimSpace(*req.WHMCSServerURL), "/")
+	}
+	if req.ClientID != nil {
+		cur.ClientID = strings.TrimSpace(*req.ClientID)
+	}
+	if req.ClientSecret != nil && *req.ClientSecret != "" {
+		cur.ClientSecret = *req.ClientSecret
+	}
+	if req.DisplayName != nil {
+		cur.DisplayName = strings.TrimSpace(*req.DisplayName)
+	}
+	if req.AllowedProductIDs != nil {
+		cur.AllowedProductIDs = make([]string, 0, len(*req.AllowedProductIDs))
+		for _, id := range *req.AllowedProductIDs {
+			cur.AllowedProductIDs = append(cur.AllowedProductIDs, strconv.Itoa(id))
+		}
+	}
+	if req.WHMCSAdminAPIID != nil {
+		cur.WHMCSAdminAPIID = strings.TrimSpace(*req.WHMCSAdminAPIID)
+	}
+	if req.WHMCSAdminAPISecret != nil && *req.WHMCSAdminAPISecret != "" {
+		cur.WHMCSAdminAPISecret = *req.WHMCSAdminAPISecret
+	}
+	if req.FetchDiscordID != nil {
+		cur.FetchDiscordID = *req.FetchDiscordID
+	}
+	if req.DiscordIDCustomField != nil {
+		cur.DiscordIDCustomField = strings.TrimSpace(*req.DiscordIDCustomField)
+	}
+	if req.ClaimRoleMapping != nil {
+		cur.ClaimRoleMapping = *req.ClaimRoleMapping
+	}
+	cur.DatabaseURL = ""
+	if err := s.deps.UpdateConfigFn(r.Context(), cur); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {

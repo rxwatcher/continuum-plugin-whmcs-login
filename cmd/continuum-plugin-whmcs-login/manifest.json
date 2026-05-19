@@ -58,156 +58,19 @@
   ],
   "global_config_schema": [
     {
-      "key": "whmcs_server_url",
-      "title": "WHMCS server URL",
-      "description": "Base URL of the WHMCS install (e.g. https://billing.example.com). No trailing slash.",
-      "required": true,
+      "key": "database_url",
+      "title": "Postgres connection string",
+      "description": "DSN for the dedicated whmcs_login schema (e.g. postgres://plugin_whmcs_login:...@host:5432/continuum?search_path=whmcs_login&sslmode=disable).",
       "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}},\"required\":[\"value\"]}",
+      "required": true,
       "admin_form": {
         "fields": [
           {
             "key": "value",
-            "label": "URL",
-            "control": "ADMIN_FORM_CONTROL_TEXT",
-            "required": true
-          }
-        ]
-      }
-    },
-    {
-      "key": "client_id",
-      "title": "OAuth client ID",
-      "required": true,
-      "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}},\"required\":[\"value\"]}",
-      "admin_form": {
-        "fields": [
-          {
-            "key": "value",
-            "label": "Client ID",
-            "control": "ADMIN_FORM_CONTROL_TEXT",
-            "required": true
-          }
-        ]
-      }
-    },
-    {
-      "key": "client_secret",
-      "title": "OAuth client secret",
-      "required": true,
-      "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}},\"required\":[\"value\"]}",
-      "admin_form": {
-        "fields": [
-          {
-            "key": "value",
-            "label": "Client secret",
+            "label": "Connection URL",
             "control": "ADMIN_FORM_CONTROL_PASSWORD",
             "required": true,
             "secret": true
-          }
-        ]
-      }
-    },
-    {
-      "key": "display_name",
-      "title": "Login button label",
-      "description": "Text shown for this provider on the Continuum login screen. Leave empty to use the default manifest label.",
-      "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}}}",
-      "admin_form": {
-        "fields": [
-          {
-            "key": "value",
-            "label": "Button label",
-            "control": "ADMIN_FORM_CONTROL_TEXT"
-          }
-        ]
-      }
-    },
-    {
-      "key": "allowed_product_ids",
-      "title": "Allowed WHMCS products",
-      "description": "Managed via the plugin /admin SPA. On-disk format: comma-separated product IDs. If empty, all WHMCS accounts are allowed.",
-      "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}}}",
-      "admin_form": {
-        "fields": [
-          {
-            "key": "value",
-            "label": "Product IDs",
-            "control": "ADMIN_FORM_CONTROL_TEXT"
-          }
-        ]
-      }
-    },
-    {
-      "key": "whmcs_admin_api_id",
-      "title": "WHMCS admin API identifier",
-      "description": "Required for product gating and Discord ID fetch.",
-      "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}}}",
-      "admin_form": {
-        "fields": [
-          {
-            "key": "value",
-            "label": "API id",
-            "control": "ADMIN_FORM_CONTROL_TEXT"
-          }
-        ]
-      }
-    },
-    {
-      "key": "whmcs_admin_api_secret",
-      "title": "WHMCS admin API secret",
-      "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}}}",
-      "admin_form": {
-        "fields": [
-          {
-            "key": "value",
-            "label": "API secret",
-            "control": "ADMIN_FORM_CONTROL_PASSWORD",
-            "secret": true
-          }
-        ]
-      }
-    },
-    {
-      "key": "fetch_discord_id",
-      "title": "Fetch Discord ID from WHMCS",
-      "description": "If true, the plugin reads a WHMCS custom field on login and includes the value as the discord_id claim.",
-      "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"boolean\"}}}",
-      "admin_form": {
-        "fields": [
-          {
-            "key": "value",
-            "label": "Enable",
-            "control": "ADMIN_FORM_CONTROL_CHECKBOX"
-          }
-        ]
-      }
-    },
-    {
-      "key": "discord_id_custom_field",
-      "title": "Discord ID custom field name",
-      "description": "Name of the WHMCS client custom field that stores the Discord ID. Defaults to 'Discord ID'.",
-      "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}}}",
-      "admin_form": {
-        "fields": [
-          {
-            "key": "value",
-            "label": "Field name",
-            "control": "ADMIN_FORM_CONTROL_TEXT"
-          }
-        ]
-      }
-    },
-    {
-      "key": "claim_role_mapping",
-      "title": "Claim role mapping",
-      "description": "Array of {product_id, role} entries. Role is 'user' or 'admin'. After every successful login, the host applies the highest-matched role.",
-      "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"array\"}}}",
-      "admin_form": {
-        "fields": [
-          {
-            "key": "value",
-            "label": "Role mapping (JSON array)",
-            "control": "ADMIN_FORM_CONTROL_TEXT"
           }
         ]
       }

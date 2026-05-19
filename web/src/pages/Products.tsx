@@ -15,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { api, patchPluginConfig, installID } from "@/lib/api";
+import { api } from "@/lib/api";
 import ProductSelector, { type Product } from "@/components/ProductSelector";
 
 type ProductsResponse = { products: Product[]; cached_at: string };
@@ -80,7 +80,11 @@ export default function Products() {
 
   const save = useMutation({
     mutationFn: async (csv: string) => {
-      await patchPluginConfig(installID(), { allowed_product_ids: { value: csv } });
+      const ids = csv
+        .split(",")
+        .map((id) => Number(id.trim()))
+        .filter((id) => Number.isInteger(id) && id > 0);
+      await api.patch("/api/v1/admin/config", { allowed_product_ids: ids });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["config-summary"] });
@@ -91,21 +95,19 @@ export default function Products() {
 
   const saveConnection = useMutation({
     mutationFn: async () => {
-      const entries: Record<string, { value: unknown }> = {
-        whmcs_server_url: { value: connectionForm.whmcs_server_url.trim() },
-        client_id: { value: connectionForm.client_id.trim() },
-        display_name: { value: connectionForm.display_name.trim() },
-        whmcs_admin_api_id: { value: connectionForm.whmcs_admin_api_id.trim() },
+      const body: Record<string, unknown> = {
+        whmcs_server_url: connectionForm.whmcs_server_url.trim(),
+        client_id: connectionForm.client_id.trim(),
+        display_name: connectionForm.display_name.trim(),
+        whmcs_admin_api_id: connectionForm.whmcs_admin_api_id.trim(),
       };
       if (connectionForm.client_secret.trim()) {
-        entries.client_secret = { value: connectionForm.client_secret.trim() };
+        body.client_secret = connectionForm.client_secret.trim();
       }
       if (connectionForm.whmcs_admin_api_secret.trim()) {
-        entries.whmcs_admin_api_secret = {
-          value: connectionForm.whmcs_admin_api_secret.trim(),
-        };
+        body.whmcs_admin_api_secret = connectionForm.whmcs_admin_api_secret.trim();
       }
-      await patchPluginConfig(installID(), entries);
+      await api.patch("/api/v1/admin/config", body);
     },
     onSuccess: async () => {
       toast.success("Connection saved");

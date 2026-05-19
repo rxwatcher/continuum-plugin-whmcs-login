@@ -26,6 +26,7 @@ type ClaimRoleMap struct {
 
 // Config is the parsed plugin global config.
 type Config struct {
+	DatabaseURL          string
 	WHMCSServerURL       string
 	ClientID             string
 	ClientSecret         string
@@ -95,6 +96,8 @@ func loadConfig(entries []*pluginv1.ConfigEntry) (Config, error) {
 		}
 		m := v.AsMap()
 		switch e.GetKey() {
+		case "database_url":
+			cfg.DatabaseURL = stringFromMap(m)
 		case "whmcs_server_url":
 			cfg.WHMCSServerURL = strings.TrimRight(stringFromMap(m), "/")
 		case "client_id":
@@ -136,13 +139,13 @@ func loadConfig(entries []*pluginv1.ConfigEntry) (Config, error) {
 		}
 	}
 
-	if err := validate(&cfg); err != nil {
+	if err := ValidateConfig(&cfg); err != nil {
 		return Config{}, err
 	}
 	return cfg, nil
 }
 
-func validate(cfg *Config) error {
+func ValidateConfig(cfg *Config) error {
 	// Configure must not reject incomplete setup. The host calls Configure
 	// before forwarding the plugin admin SPA, so operational prerequisites are
 	// enforced by the auth/admin handlers that actually need them.

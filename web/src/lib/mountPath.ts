@@ -10,15 +10,3 @@ export function extractMountPath(pathname: string): string {
 export function mountPath(): string {
   return extractMountPath(window.location.pathname);
 }
-
-// installID extracts the installation ID portion of the proxy prefix, used
-// by patchPluginConfig to call continuum's PATCH /admin/plugins/{id}/config
-// endpoint directly.
-export function extractInstallID(pathname: string): string {
-  const m = pathname.match(/^\/api\/v1\/plugins\/([^/]+)/);
-  return m ? m[1] : "";
-}
-
-export function installID(): string {
-  return extractInstallID(window.location.pathname);
-}

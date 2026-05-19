@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"embed"
 	_ "embed"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	pluginv1 "github.com/ContinuumApp/continuum-plugin-sdk/pkg/pluginproto/continuum/plugin/v1"
 	publicmanifest "github.com/ContinuumApp/continuum-plugin-sdk/pkg/pluginsdk/manifest"
@@ -25,6 +27,7 @@ import (
 	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/httproutes"
 	pluginrt "github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/runtime"
 	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/server"
+	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/store"
 	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/whmcs"
 	"github.com/ContinuumApp/continuum-plugin-whmcs-login/web"
 )
@@ -53,6 +56,9 @@ func main() {
 	// cfgPtr holds the latest Config so AuthServer + AdminServer see new
 	// values immediately on Configure without rebuilding gRPC plumbing.
 	var cfgPtr atomic.Pointer[pluginrt.Config]
+	var poolPtr atomic.Pointer[pgxpool.Pool]
+	var storePtr atomic.Pointer[store.Store]
+	var cachePtr atomic.Pointer[whmcs.ProductCache]
 	cfgFn := func() pluginrt.Config {
 		if p := cfgPtr.Load(); p != nil {
 			return *p
@@ -62,18 +68,66 @@ func main() {
 
 	authSrv := pluginauth.NewServer(cfgFn)
 
-	rt := pluginrt.New(manifest, func(cfg pluginrt.Config) error {
+	applyConfig := func(cfg pluginrt.Config) (*whmcs.ProductCache, error) {
 		cfgPtr.Store(&cfg)
-
 		var prodCache *whmcs.ProductCache
 		if cfg.WHMCSAdminAPIID != "" && cfg.WHMCSAdminAPISecret != "" {
 			apiClient := whmcs.NewAPIClient(cfg.WHMCSServerURL, cfg.WHMCSAdminAPIID, cfg.WHMCSAdminAPISecret)
 			prodCache = whmcs.NewProductCache(apiClient, productCacheTTL)
 		}
+		cachePtr.Store(prodCache)
+		logger.Info("configured",
+			"whmcs_server_url", cfg.WHMCSServerURL,
+			"admin_api_configured", prodCache != nil)
+		return prodCache, nil
+	}
+
+	rt := pluginrt.New(manifest, func(cfg pluginrt.Config) error {
+		if cfg.DatabaseURL == "" {
+			return fmt.Errorf("database_url is required")
+		}
+		ctx := context.Background()
+		pcfg, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+		if err != nil {
+			return fmt.Errorf("parse database_url: %w", err)
+		}
+		if pcfg.MaxConns < 8 {
+			pcfg.MaxConns = 8
+		}
+		pool, err := pgxpool.NewWithConfig(ctx, pcfg)
+		if err != nil {
+			return fmt.Errorf("connect database: %w", err)
+		}
+		if err := store.Migrate(ctx, pool); err != nil {
+			pool.Close()
+			return fmt.Errorf("migrate: %w", err)
+		}
+		st := store.New(pool)
+		effective, err := st.ImportLegacyConfig(ctx, cfg)
+		if err != nil {
+			pool.Close()
+			return fmt.Errorf("import app config: %w", err)
+		}
+		if _, err := applyConfig(effective); err != nil {
+			pool.Close()
+			return err
+		}
+		storePtr.Store(st)
 
 		adminSrv := admin.NewServer(admin.Deps{
-			ConfigFn:     cfgFn,
-			ProductCache: prodCache,
+			ConfigFn:       cfgFn,
+			ProductCacheFn: func() *whmcs.ProductCache { return cachePtr.Load() },
+			UpdateConfigFn: func(ctx context.Context, next pluginrt.Config) error {
+				st := storePtr.Load()
+				if st == nil {
+					return fmt.Errorf("store not configured")
+				}
+				if err := st.UpdateConfig(ctx, next); err != nil {
+					return err
+				}
+				_, err := applyConfig(next)
+				return err
+			},
 		})
 
 		srv := server.New(server.Deps{
@@ -83,9 +137,9 @@ func main() {
 			StaticRoot: "assets",
 		})
 		httpSrv.SetHandler(srv.Handler())
-		logger.Info("configured",
-			"whmcs_server_url", cfg.WHMCSServerURL,
-			"admin_api_configured", prodCache != nil)
+		if old := poolPtr.Swap(pool); old != nil {
+			old.Close()
+		}
 		return nil
 	})
 

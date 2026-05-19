@@ -27,8 +27,8 @@ func (f *fakeProductsFetcher) GetProducts(_ context.Context) ([]whmcs.Product, e
 func newAdminServer(cfg pluginrt.Config, prods []whmcs.Product) *admin.Server {
 	cache := whmcs.NewProductCache(&fakeProductsFetcher{out: prods}, time.Minute)
 	return admin.NewServer(admin.Deps{
-		ConfigFn:     func() pluginrt.Config { return cfg },
-		ProductCache: cache,
+		ConfigFn:       func() pluginrt.Config { return cfg },
+		ProductCacheFn: func() *whmcs.ProductCache { return cache },
 	})
 }
 
@@ -42,6 +42,7 @@ func mountRouter(a *admin.Server) http.Handler {
 		r.Get("/api/v1/admin/products", a.HandleProducts)
 		r.Post("/api/v1/admin/products/refresh", a.HandleProductsRefresh)
 		r.Get("/api/v1/admin/config-summary", a.HandleConfigSummary)
+		r.Patch("/api/v1/admin/config", a.HandleUpdateConfig)
 	})
 	return r
 }

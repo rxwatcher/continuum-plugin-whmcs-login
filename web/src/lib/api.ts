@@ -1,4 +1,4 @@
-import { mountPath, installID } from "./mountPath";
+import { mountPath } from "./mountPath";
 import { getCachedToken } from "./auth";
 
 function authHeaders(): Record<string, string> {
@@ -31,21 +31,7 @@ export const api = {
   post<T>(path: string, body?: unknown): Promise<T> {
     return request<T>("POST", path, body);
   },
+  patch<T>(path: string, body?: unknown): Promise<T> {
+    return request<T>("PATCH", path, body);
+  },
 };
-
-// patchPluginConfig saves config changes back through continuum's own admin
-// API. Continuum then re-runs Configure on the plugin with the new values.
-// We do not proxy through the plugin — saving is a continuum-host concern.
-export async function patchPluginConfig(
-  id: string,
-  entries: Record<string, { value: unknown }>,
-): Promise<void> {
-  const r = await fetch(`/api/v1/admin/plugins/${id}/config`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ entries }),
-  });
-  if (!r.ok) throw new Error(`${r.status}: ${await r.text().catch(() => "")}`);
-}
-
-export { installID };

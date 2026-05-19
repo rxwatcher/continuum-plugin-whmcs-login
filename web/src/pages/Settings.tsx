@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { api, patchPluginConfig, installID } from "@/lib/api";
+import { api } from "@/lib/api";
 
 type ClaimRoleMap = { product_id: string; role: string };
 
@@ -52,19 +52,16 @@ export default function Settings() {
 
   const save = useMutation({
     mutationFn: async () => {
-      const entries: Record<string, { value: unknown }> = {};
-      const set = (k: string, v: unknown) => {
-        entries[k] = { value: v };
-      };
+      const body: Record<string, unknown> = {};
 
-      if (form.whmcs_server_url !== undefined) set("whmcs_server_url", form.whmcs_server_url);
-      if (form.client_id !== undefined) set("client_id", form.client_id);
-      if (form.client_secret) set("client_secret", form.client_secret);
-      if (form.whmcs_admin_api_id !== undefined) set("whmcs_admin_api_id", form.whmcs_admin_api_id);
-      if (form.whmcs_admin_api_secret) set("whmcs_admin_api_secret", form.whmcs_admin_api_secret);
-      if (form.fetch_discord_id !== undefined) set("fetch_discord_id", form.fetch_discord_id);
+      if (form.whmcs_server_url !== undefined) body.whmcs_server_url = form.whmcs_server_url;
+      if (form.client_id !== undefined) body.client_id = form.client_id;
+      if (form.client_secret) body.client_secret = form.client_secret;
+      if (form.whmcs_admin_api_id !== undefined) body.whmcs_admin_api_id = form.whmcs_admin_api_id;
+      if (form.whmcs_admin_api_secret) body.whmcs_admin_api_secret = form.whmcs_admin_api_secret;
+      if (form.fetch_discord_id !== undefined) body.fetch_discord_id = form.fetch_discord_id;
       if (form.discord_id_custom_field !== undefined)
-        set("discord_id_custom_field", form.discord_id_custom_field);
+        body.discord_id_custom_field = form.discord_id_custom_field;
 
       let parsedMapping: ClaimRoleMap[];
       try {
@@ -86,9 +83,9 @@ export default function Settings() {
           throw new Error(`claim_role_mapping[${i}].role must be 'user' or 'admin'`);
         }
       }
-      set("claim_role_mapping", parsedMapping);
+      body.claim_role_mapping = parsedMapping;
 
-      await patchPluginConfig(installID(), entries);
+      await api.patch("/api/v1/admin/config", body);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["config-summary"] });
