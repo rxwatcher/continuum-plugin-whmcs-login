@@ -34,6 +34,7 @@ func TestLoadConfig_HappyPath(t *testing.T) {
 		entry(t, "whmcs_server_url", "https://billing.example.com/"),
 		entry(t, "client_id", "cid"),
 		entry(t, "client_secret", "shh"),
+		entry(t, "icon_url_path", "https://example.com/whmcs.svg"),
 	}
 	cfg, err := loadConfig(entries)
 	if err != nil {
@@ -47,6 +48,9 @@ func TestLoadConfig_HappyPath(t *testing.T) {
 	}
 	if cfg.DiscordIDCustomField != "Discord ID" {
 		t.Errorf("default DiscordIDCustomField = %q", cfg.DiscordIDCustomField)
+	}
+	if cfg.IconURLPath != "https://example.com/whmcs.svg" {
+		t.Errorf("IconURLPath = %q", cfg.IconURLPath)
 	}
 }
 

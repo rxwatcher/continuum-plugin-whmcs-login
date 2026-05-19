@@ -142,6 +142,7 @@ func ExchangeCode(ctx context.Context, p ExchangeParams) (TokenResponse, error) 
 
 // UserInfo is the JSON shape returned by WHMCS's /oauth/userinfo.php.
 type UserInfo struct {
+	Sub        string `json:"sub"`
 	ID         string `json:"id"`
 	Email      string `json:"email"`
 	Name       string `json:"name"`
@@ -178,10 +179,14 @@ func FetchUserInfo(ctx context.Context, serverURL, accessToken string) (UserInfo
 	if err := json.Unmarshal(body, &ui); err != nil {
 		return UserInfo{}, fmt.Errorf("decode userinfo: %w", err)
 	}
+	ui.Sub = strings.TrimSpace(ui.Sub)
 	ui.ID = strings.TrimSpace(ui.ID)
 	ui.Email = strings.TrimSpace(ui.Email)
-	if ui.ID == "" {
-		return UserInfo{}, fmt.Errorf("userinfo response missing id")
+	if ui.Sub == "" {
+		ui.Sub = ui.ID
+	}
+	if ui.Sub == "" {
+		return UserInfo{}, fmt.Errorf("userinfo response missing subject")
 	}
 	return ui, nil
 }

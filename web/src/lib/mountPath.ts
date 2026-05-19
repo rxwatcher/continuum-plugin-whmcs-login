@@ -10,3 +10,10 @@ export function extractMountPath(pathname: string): string {
 export function mountPath(): string {
   return extractMountPath(window.location.pathname);
 }
+
+export function installationID(): number | null {
+  const m = mountPath().match(/\/api\/v1\/plugins\/(\d+)$/);
+  if (!m?.[1]) return null;
+  const id = Number(m[1]);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}

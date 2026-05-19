@@ -16,14 +16,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
+import { installationID } from "@/lib/mountPath";
+import { copyText } from "@/lib/copyText";
+import { currentOAuthCallbackUrl } from "@/lib/oauthCallbackUrl";
 import ProductSelector, { type Product } from "@/components/ProductSelector";
 
-type ProductsResponse = { products: Product[]; cached_at: string };
+type ProductsResponse = { products: Product[]; cached_at: string; configured?: boolean };
 type ConfigSummary = {
   allowed_product_ids: number[];
   whmcs_server_url: string;
   client_id: string;
   has_client_secret: boolean;
+  icon_url_path: string;
   display_name: string;
   whmcs_admin_api_id: string;
   has_whmcs_admin_api_secret: boolean;
@@ -33,6 +37,7 @@ type ConnectionFormState = {
   whmcs_server_url: string;
   client_id: string;
   client_secret: string;
+  icon_url_path: string;
   display_name: string;
   whmcs_admin_api_id: string;
   whmcs_admin_api_secret: string;
@@ -44,6 +49,7 @@ export default function Products() {
     whmcs_server_url: "",
     client_id: "",
     client_secret: "",
+    icon_url_path: "",
     display_name: "",
     whmcs_admin_api_id: "",
     whmcs_admin_api_secret: "",
@@ -64,6 +70,7 @@ export default function Products() {
       ...current,
       whmcs_server_url: configQ.data.whmcs_server_url ?? "",
       client_id: configQ.data.client_id ?? "",
+      icon_url_path: configQ.data.icon_url_path ?? "",
       display_name: configQ.data.display_name ?? "",
       whmcs_admin_api_id: configQ.data.whmcs_admin_api_id ?? "",
     }));
@@ -98,6 +105,7 @@ export default function Products() {
       const body: Record<string, unknown> = {
         whmcs_server_url: connectionForm.whmcs_server_url.trim(),
         client_id: connectionForm.client_id.trim(),
+        icon_url_path: connectionForm.icon_url_path.trim(),
         display_name: connectionForm.display_name.trim(),
         whmcs_admin_api_id: connectionForm.whmcs_admin_api_id.trim(),
       };
@@ -108,6 +116,18 @@ export default function Products() {
         body.whmcs_admin_api_secret = connectionForm.whmcs_admin_api_secret.trim();
       }
       await api.patch("/api/v1/admin/config", body);
+      const id = installationID();
+      if (id) {
+        await api.hostPut(`/api/v1/admin/plugins/installations/${id}/auth-binding`, {
+          capability_id: "whmcs",
+          enabled: true,
+          display_order: 100,
+          auto_provision: true,
+          default_login: false,
+          display_name: connectionForm.display_name.trim(),
+          icon_url_path: connectionForm.icon_url_path.trim(),
+        });
+      }
     },
     onSuccess: async () => {
       toast.success("Connection saved");
@@ -168,6 +188,8 @@ export default function Products() {
   const products = productsQ.data?.products ?? [];
   const initialEnabled = configQ.data?.allowed_product_ids ?? [];
   const cachedAt = productsQ.data?.cached_at;
+  const apiReady = !!configQ.data?.whmcs_admin_api_id && !!configQ.data?.has_whmcs_admin_api_secret;
+  const productFetchConnected = isProductFetchConnected(apiReady, productsQ.data);
 
   return (
     <div className="space-y-6">
@@ -183,7 +205,7 @@ export default function Products() {
         config={configQ.data}
         form={connectionForm}
         setForm={setConnectionForm}
-        connected={true}
+        connected={productFetchConnected}
         saveConnection={() => saveConnection.mutate()}
         savingConnection={saveConnection.isPending}
         refresh={() => refresh.mutate()}
@@ -198,6 +220,10 @@ export default function Products() {
       />
     </div>
   );
+}
+
+export function isProductFetchConnected(apiReady: boolean, products?: ProductsResponse): boolean {
+  return apiReady && products?.configured !== false;
 }
 
 function PageHeader({
@@ -341,6 +367,14 @@ function ConnectionFields({
   const update = (key: keyof ConnectionFormState) => (value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
+  const callbackUrl = currentOAuthCallbackUrl();
+  const copyCallbackUrl = async () => {
+    if (await copyText(callbackUrl)) {
+      toast.success("Callback URL copied");
+    } else {
+      toast.error("Copy failed. Select the URL and copy it manually.");
+    }
+  };
 
   return (
     <div className="border-border/70 bg-background/50 rounded-md border p-4">
@@ -353,6 +387,17 @@ function ConnectionFields({
             </p>
           </div>
           <div className="grid gap-4">
+            <Field label="Callback URL">
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                <Input readOnly value={callbackUrl} />
+                <Button type="button" variant="outline" onClick={copyCallbackUrl}>
+                  Copy
+                </Button>
+              </div>
+              <p className="text-muted-foreground text-xs">
+                Paste this as the redirect or callback URL in WHMCS OAuth credentials.
+              </p>
+            </Field>
             <Field label="WHMCS server URL">
               <Input
                 value={form.whmcs_server_url}
@@ -366,6 +411,16 @@ function ConnectionFields({
                 onChange={(e) => update("display_name")(e.target.value)}
                 placeholder="Sign in with WHMCS"
               />
+            </Field>
+            <Field label="Custom icon URL or path">
+              <Input
+                value={form.icon_url_path}
+                onChange={(e) => update("icon_url_path")(e.target.value)}
+                placeholder="https://example.com/whmcs.svg or /assets/whmcs-logo.svg"
+              />
+              <p className="text-muted-foreground text-xs">
+                Leave blank to use the bundled WHMCS logo.
+              </p>
             </Field>
             <Field label="OAuth client ID">
               <Input

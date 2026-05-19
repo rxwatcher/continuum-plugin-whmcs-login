@@ -107,15 +107,15 @@ func TestBuildAuthorizeURL(t *testing.T) {
 	}
 }
 
-func TestFetchUserInfo_RejectsMissingID(t *testing.T) {
+func TestFetchUserInfo_RejectsMissingSubject(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"email":"u@x.com","name":"User"}`))
 	}))
 	defer srv.Close()
 
 	_, err := whmcs.FetchUserInfo(context.Background(), srv.URL, "AT")
-	if err == nil || !strings.Contains(err.Error(), "missing id") {
-		t.Fatalf("expected missing id error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "missing subject") {
+		t.Fatalf("expected missing subject error, got %v", err)
 	}
 }
 
@@ -198,7 +198,7 @@ func TestFetchUserInfo_AttachesBearerAndDecodes(t *testing.T) {
 		if r.URL.Path != "/oauth/userinfo.php" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
-		_, _ = w.Write([]byte(`{"id":"42","email":"u@x.com","name":"User","picture":"https://x/u.png","given_name":"U","family_name":"R"}`))
+		_, _ = w.Write([]byte(`{"sub":"whmcs-client-42","email":"u@x.com","name":"User","picture":"https://x/u.png","given_name":"U","family_name":"R"}`))
 	}))
 	defer srv.Close()
 
@@ -209,7 +209,7 @@ func TestFetchUserInfo_AttachesBearerAndDecodes(t *testing.T) {
 	if gotAuth != "Bearer AT" {
 		t.Errorf("auth = %q", gotAuth)
 	}
-	if ui.ID != "42" || ui.Email != "u@x.com" || ui.Name != "User" || ui.GivenName != "U" || ui.FamilyName != "R" {
+	if ui.Sub != "whmcs-client-42" || ui.Email != "u@x.com" || ui.Name != "User" || ui.GivenName != "U" || ui.FamilyName != "R" {
 		t.Errorf("ui = %+v", ui)
 	}
 }
@@ -224,7 +224,22 @@ func TestFetchUserInfo_TrimsIdentityFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchUserInfo: %v", err)
 	}
-	if ui.ID != "42" || ui.Email != "u@x.com" {
+	if ui.Sub != "42" || ui.ID != "42" || ui.Email != "u@x.com" {
+		t.Fatalf("ui = %+v", ui)
+	}
+}
+
+func TestFetchUserInfo_FallsBackToLegacyIDSubject(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"42","email":"u@x.com","name":"User"}`))
+	}))
+	defer srv.Close()
+
+	ui, err := whmcs.FetchUserInfo(context.Background(), srv.URL, "AT")
+	if err != nil {
+		t.Fatalf("FetchUserInfo: %v", err)
+	}
+	if ui.Sub != "42" || ui.ID != "42" {
 		t.Fatalf("ui = %+v", ui)
 	}
 }

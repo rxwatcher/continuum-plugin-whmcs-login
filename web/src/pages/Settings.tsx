@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
+import { copyText } from "@/lib/copyText";
+import { currentOAuthCallbackUrl } from "@/lib/oauthCallbackUrl";
 
 type ClaimRoleMap = { product_id: string; role: string };
 
@@ -15,6 +17,7 @@ type ConfigSummary = {
   whmcs_server_url: string;
   client_id: string;
   has_client_secret: boolean;
+  icon_url_path: string;
   whmcs_admin_api_id: string;
   has_whmcs_admin_api_secret: boolean;
   fetch_discord_id: boolean;
@@ -36,12 +39,21 @@ export default function Settings() {
 
   const [form, setForm] = useState<FormState>({});
   const [roleMappingJSON, setRoleMappingJSON] = useState("");
+  const callbackUrl = currentOAuthCallbackUrl();
+  const copyCallbackUrl = async () => {
+    if (await copyText(callbackUrl)) {
+      toast.success("Callback URL copied");
+    } else {
+      toast.error("Copy failed. Select the URL and copy it manually.");
+    }
+  };
 
   useEffect(() => {
     if (cfgQ.data) {
       setForm({
         whmcs_server_url: cfgQ.data.whmcs_server_url,
         client_id: cfgQ.data.client_id,
+        icon_url_path: cfgQ.data.icon_url_path,
         whmcs_admin_api_id: cfgQ.data.whmcs_admin_api_id,
         fetch_discord_id: cfgQ.data.fetch_discord_id,
         discord_id_custom_field: cfgQ.data.discord_id_custom_field,
@@ -56,6 +68,7 @@ export default function Settings() {
 
       if (form.whmcs_server_url !== undefined) body.whmcs_server_url = form.whmcs_server_url;
       if (form.client_id !== undefined) body.client_id = form.client_id;
+      if (form.icon_url_path !== undefined) body.icon_url_path = form.icon_url_path;
       if (form.client_secret) body.client_secret = form.client_secret;
       if (form.whmcs_admin_api_id !== undefined) body.whmcs_admin_api_id = form.whmcs_admin_api_id;
       if (form.whmcs_admin_api_secret) body.whmcs_admin_api_secret = form.whmcs_admin_api_secret;
@@ -109,6 +122,17 @@ export default function Settings() {
       <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
 
       <Section title="WHMCS connection">
+        <Field label="Callback URL">
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <Input readOnly value={callbackUrl} />
+            <Button type="button" variant="outline" onClick={copyCallbackUrl}>
+              Copy
+            </Button>
+          </div>
+          <p className="text-muted-foreground text-xs">
+            Paste this as the redirect or callback URL in WHMCS OAuth credentials.
+          </p>
+        </Field>
         <Field label="WHMCS server URL">
           <Input
             value={form.whmcs_server_url ?? ""}
@@ -123,6 +147,16 @@ export default function Settings() {
             value={form.client_id ?? ""}
             onChange={(e) => setForm((f) => ({ ...f, client_id: e.target.value }))}
           />
+        </Field>
+        <Field label="Custom icon URL or path">
+          <Input
+            value={form.icon_url_path ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, icon_url_path: e.target.value }))}
+            placeholder="https://example.com/whmcs.svg or /assets/whmcs-logo.svg"
+          />
+          <p className="text-muted-foreground text-xs">
+            Leave blank to use the bundled WHMCS logo.
+          </p>
         </Field>
         <Field label="OAuth client secret">
           <Input

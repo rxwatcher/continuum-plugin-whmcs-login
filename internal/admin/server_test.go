@@ -147,6 +147,7 @@ func TestConfigSummary_RedactsSecrets(t *testing.T) {
 		AllowedProductIDs: []string{"1", "5"},
 		WHMCSAdminAPIID:   "aid", WHMCSAdminAPISecret: "asec",
 		FetchDiscordID: true, DiscordIDCustomField: "Discord ID",
+		IconURLPath: "https://example.com/icon.svg",
 		ClaimRoleMapping: []pluginrt.ClaimRoleMap{
 			{ProductID: "5", Role: "admin"},
 		},
@@ -175,6 +176,9 @@ func TestConfigSummary_RedactsSecrets(t *testing.T) {
 	}
 	if body["client_id"] != "cid" {
 		t.Errorf("client_id = %v", body["client_id"])
+	}
+	if body["icon_url_path"] != "https://example.com/icon.svg" {
+		t.Errorf("icon_url_path = %v", body["icon_url_path"])
 	}
 	prods, _ := body["allowed_product_ids"].([]any)
 	if len(prods) != 2 {

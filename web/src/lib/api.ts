@@ -34,4 +34,15 @@ export const api = {
   patch<T>(path: string, body?: unknown): Promise<T> {
     return request<T>("PATCH", path, body);
   },
+  async hostPut<T>(path: string, body?: unknown): Promise<T> {
+    const init: RequestInit = {
+      method: "PUT",
+      headers: {
+        ...authHeaders(),
+        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      },
+    };
+    if (body !== undefined) init.body = JSON.stringify(body);
+    return jsonOrThrow<T>(await fetch(path, init));
+  },
 };

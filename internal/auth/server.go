@@ -119,6 +119,7 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 
 	claims := map[string]any{
 		"raw_userinfo": map[string]any{
+			"sub":         ui.Sub,
 			"id":          ui.ID,
 			"email":       ui.Email,
 			"name":        ui.Name,
@@ -187,7 +188,7 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 		return nil, status.Errorf(codes.Internal, "encode claims: %v", err)
 	}
 	return &pluginv1.AuthenticateResponse{
-		ExternalSubject: ui.ID,
+		ExternalSubject: ui.Sub,
 		DisplayName:     ui.Name,
 		Email:           ui.Email,
 		Claims:          cs,

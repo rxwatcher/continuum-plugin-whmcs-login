@@ -31,6 +31,7 @@ type Config struct {
 	ClientID             string
 	ClientSecret         string
 	DisplayName          string
+	IconURLPath          string
 	AllowedProductIDs    []string // parsed from comma-separated string
 	WHMCSAdminAPIID      string
 	WHMCSAdminAPISecret  string
@@ -106,6 +107,8 @@ func loadConfig(entries []*pluginv1.ConfigEntry) (Config, error) {
 			cfg.ClientSecret = stringFromMap(m)
 		case "display_name":
 			cfg.DisplayName = stringFromMap(m)
+		case "icon_url_path":
+			cfg.IconURLPath = strings.TrimSpace(stringFromMap(m))
 		case "allowed_product_ids":
 			raw := stringFromMap(m)
 			if raw != "" {

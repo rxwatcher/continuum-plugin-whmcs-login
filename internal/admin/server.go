@@ -127,6 +127,7 @@ func (s *Server) HandleConfigSummary(w http.ResponseWriter, _ *http.Request) {
 		"whmcs_server_url":           cfg.WHMCSServerURL,
 		"client_id":                  cfg.ClientID,
 		"has_client_secret":          cfg.ClientSecret != "",
+		"icon_url_path":              cfg.IconURLPath,
 		"display_name":               cfg.DisplayName,
 		"whmcs_admin_api_id":         cfg.WHMCSAdminAPIID,
 		"has_whmcs_admin_api_secret": cfg.WHMCSAdminAPISecret != "",
@@ -148,6 +149,7 @@ func (s *Server) HandleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		ClientID             *string                  `json:"client_id"`
 		ClientSecret         *string                  `json:"client_secret"`
 		DisplayName          *string                  `json:"display_name"`
+		IconURLPath          *string                  `json:"icon_url_path"`
 		AllowedProductIDs    *[]int                   `json:"allowed_product_ids"`
 		WHMCSAdminAPIID      *string                  `json:"whmcs_admin_api_id"`
 		WHMCSAdminAPISecret  *string                  `json:"whmcs_admin_api_secret"`
@@ -170,6 +172,9 @@ func (s *Server) HandleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.DisplayName != nil {
 		cur.DisplayName = strings.TrimSpace(*req.DisplayName)
+	}
+	if req.IconURLPath != nil {
+		cur.IconURLPath = strings.TrimSpace(*req.IconURLPath)
 	}
 	if req.AllowedProductIDs != nil {
 		cur.AllowedProductIDs = make([]string, 0, len(*req.AllowedProductIDs))
