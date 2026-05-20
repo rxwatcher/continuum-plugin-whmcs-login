@@ -279,6 +279,216 @@ func TestExchangeCode_DiscordIDClaim_FetchedFromCustomField(t *testing.T) {
 	}
 }
 
+func TestExchangeCode_DiscordIDFailureIsNonFatal(t *testing.T) {
+	// GetClientsDetails returns a WHMCS error envelope while everything else
+	// (token, userinfo, GetClients, GetClientsProducts) succeeds. The plugin
+	// must let the login through with no discord_id claim rather than
+	// failing the whole sign-in over a missing custom field.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/oauth/token.php":
+			_, _ = w.Write([]byte(`{"access_token":"AT","id_token":"a.b.c"}`))
+		case "/oauth/userinfo.php":
+			_, _ = w.Write([]byte(`{"id":"42","email":"u@x.com","name":"User"}`))
+		case "/includes/api.php":
+			_ = r.ParseForm()
+			switch r.Form.Get("action") {
+			case "GetClients":
+				_, _ = w.Write([]byte(`{"result":"success","clients":{"client":[{"id":"42","email":"u@x.com"}]}}`))
+			case "GetClientsProducts":
+				_, _ = w.Write([]byte(`{"result":"success","products":{"product":[{"pid":5,"status":"Active"}]}}`))
+			case "GetClientsDetails":
+				_, _ = w.Write([]byte(`{"result":"error","message":"upstream blew up"}`))
+			default:
+				_, _ = w.Write([]byte(`{"result":"error","message":"unexpected"}`))
+			}
+		}
+	}))
+	defer srv.Close()
+
+	cfg := pluginrt.Config{
+		WHMCSServerURL: srv.URL, ClientID: "c", ClientSecret: "s",
+		AllowedProductIDs:    []string{"5"},
+		FetchDiscordID:       true,
+		DiscordIDCustomField: "Discord ID",
+		WHMCSAdminAPIID:      "id", WHMCSAdminAPISecret: "sec",
+	}
+	s := newAuthServer(cfg)
+
+	resp, err := s.ExchangeCode(context.Background(), &pluginv1.ExchangeCodeRequest{
+		Code: "x", State: "s", RedirectUri: "/cb",
+		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v"}),
+	})
+	if err != nil {
+		t.Fatalf("ExchangeCode should have succeeded despite details outage: %v", err)
+	}
+	if _, present := resp.GetClaims().AsMap()["discord_id"]; present {
+		t.Errorf("discord_id should be absent when fetch failed")
+	}
+}
+
+func TestExchangeCode_EmailHasNoMatchingClient_Rejects(t *testing.T) {
+	// GetClients returns an empty clients envelope, which translates to a nil
+	// Client from GetClientByEmail. The plugin must reject this with
+	// PermissionDenied rather than auto-provisioning an unknown identity.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/oauth/token.php":
+			_, _ = w.Write([]byte(`{"access_token":"AT","id_token":"a.b.c"}`))
+		case "/oauth/userinfo.php":
+			_, _ = w.Write([]byte(`{"id":"42","email":"unknown@x.com","name":"User"}`))
+		case "/includes/api.php":
+			_ = r.ParseForm()
+			if r.Form.Get("action") == "GetClients" {
+				_, _ = w.Write([]byte(`{"result":"success","clients":{"client":[]}}`))
+				return
+			}
+		}
+	}))
+	defer srv.Close()
+
+	cfg := pluginrt.Config{
+		WHMCSServerURL: srv.URL, ClientID: "c", ClientSecret: "s",
+		AllowedProductIDs: []string{"5"},
+		WHMCSAdminAPIID:   "id", WHMCSAdminAPISecret: "sec",
+	}
+	s := newAuthServer(cfg)
+
+	_, err := s.ExchangeCode(context.Background(), &pluginv1.ExchangeCodeRequest{
+		Code: "x", State: "s", RedirectUri: "/cb",
+		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v"}),
+	})
+	if status.Code(err) != codes.PermissionDenied {
+		t.Errorf("code = %v, want PermissionDenied; err = %v", status.Code(err), err)
+	}
+}
+
+func TestExchangeCode_ProductsLookupError_FailsLogin(t *testing.T) {
+	// GetClientsProducts returns a WHMCS error. This is the entitlement
+	// source of truth — failing closed is correct: we must NOT let the user
+	// through with an empty product list.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/oauth/token.php":
+			_, _ = w.Write([]byte(`{"access_token":"AT","id_token":"a.b.c"}`))
+		case "/oauth/userinfo.php":
+			_, _ = w.Write([]byte(`{"id":"42","email":"u@x.com"}`))
+		case "/includes/api.php":
+			_ = r.ParseForm()
+			switch r.Form.Get("action") {
+			case "GetClients":
+				_, _ = w.Write([]byte(`{"result":"success","clients":{"client":[{"id":"42","email":"u@x.com"}]}}`))
+			case "GetClientsProducts":
+				_, _ = w.Write([]byte(`{"result":"error","message":"db locked"}`))
+			}
+		}
+	}))
+	defer srv.Close()
+
+	cfg := pluginrt.Config{
+		WHMCSServerURL: srv.URL, ClientID: "c", ClientSecret: "s",
+		AllowedProductIDs: []string{"5"},
+		WHMCSAdminAPIID:   "id", WHMCSAdminAPISecret: "sec",
+	}
+	s := newAuthServer(cfg)
+
+	_, err := s.ExchangeCode(context.Background(), &pluginv1.ExchangeCodeRequest{
+		Code: "x", State: "s", RedirectUri: "/cb",
+		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v"}),
+	})
+	if err == nil {
+		t.Fatal("expected ExchangeCode to fail when products lookup errors")
+	}
+	if status.Code(err) != codes.Internal {
+		t.Errorf("code = %v, want Internal", status.Code(err))
+	}
+}
+
+func TestExchangeCode_RoleMapping_AdminAppliedFromOwnedProduct(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/oauth/token.php":
+			_, _ = w.Write([]byte(`{"access_token":"AT","id_token":"a.b.c"}`))
+		case "/oauth/userinfo.php":
+			_, _ = w.Write([]byte(`{"id":"42","email":"u@x.com","name":"User"}`))
+		case "/includes/api.php":
+			_ = r.ParseForm()
+			switch r.Form.Get("action") {
+			case "GetClients":
+				_, _ = w.Write([]byte(`{"result":"success","clients":{"client":[{"id":"42","email":"u@x.com"}]}}`))
+			case "GetClientsProducts":
+				_, _ = w.Write([]byte(`{"result":"success","products":{"product":[{"pid":12,"status":"Active"}]}}`))
+			}
+		}
+	}))
+	defer srv.Close()
+
+	cfg := pluginrt.Config{
+		WHMCSServerURL: srv.URL, ClientID: "c", ClientSecret: "s",
+		ClaimRoleMapping: []pluginrt.ClaimRoleMap{
+			{ProductID: "12", Role: "admin"},
+		},
+		WHMCSAdminAPIID: "id", WHMCSAdminAPISecret: "sec",
+	}
+	s := newAuthServer(cfg)
+
+	resp, err := s.ExchangeCode(context.Background(), &pluginv1.ExchangeCodeRequest{
+		Code: "x", State: "s", RedirectUri: "/cb",
+		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v"}),
+	})
+	if err != nil {
+		t.Fatalf("ExchangeCode: %v", err)
+	}
+	if got := resp.GetClaims().AsMap()["continuum_role"]; got != "admin" {
+		t.Errorf("continuum_role = %v, want admin", got)
+	}
+}
+
+func TestExchangeCode_RoleMapping_IgnoresMalformedRoleEntries(t *testing.T) {
+	// runtime/validate normally rejects invalid roles at Configure time, but
+	// belt-and-braces: if a malformed entry sneaks in (e.g. via direct DB
+	// edit, or a future migration that misses a default), it must NOT crash
+	// or elevate the user. The auth path silently skips it.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/oauth/token.php":
+			_, _ = w.Write([]byte(`{"access_token":"AT","id_token":"a.b.c"}`))
+		case "/oauth/userinfo.php":
+			_, _ = w.Write([]byte(`{"id":"42","email":"u@x.com"}`))
+		case "/includes/api.php":
+			_ = r.ParseForm()
+			switch r.Form.Get("action") {
+			case "GetClients":
+				_, _ = w.Write([]byte(`{"result":"success","clients":{"client":[{"id":"42","email":"u@x.com"}]}}`))
+			case "GetClientsProducts":
+				_, _ = w.Write([]byte(`{"result":"success","products":{"product":[{"pid":12,"status":"Active"}]}}`))
+			}
+		}
+	}))
+	defer srv.Close()
+
+	cfg := pluginrt.Config{
+		WHMCSServerURL: srv.URL, ClientID: "c", ClientSecret: "s",
+		ClaimRoleMapping: []pluginrt.ClaimRoleMap{
+			{ProductID: "12", Role: "superadmin"}, // malformed
+			{ProductID: "99", Role: "admin"},      // doesn't own this product
+		},
+		WHMCSAdminAPIID: "id", WHMCSAdminAPISecret: "sec",
+	}
+	s := newAuthServer(cfg)
+
+	resp, err := s.ExchangeCode(context.Background(), &pluginv1.ExchangeCodeRequest{
+		Code: "x", State: "s", RedirectUri: "/cb",
+		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v"}),
+	})
+	if err != nil {
+		t.Fatalf("ExchangeCode: %v", err)
+	}
+	if got := resp.GetClaims().AsMap()["continuum_role"]; got != "user" {
+		t.Errorf("continuum_role = %v, want user (malformed entry must not elevate)", got)
+	}
+}
+
 // PKCE is this plugin's CSRF defense for the OAuth callback: the verifier
 // generated in InitAuthorize is round-tripped via provider_state and bound to
 // the upstream code_challenge. A missing or mismatched verifier MUST cause

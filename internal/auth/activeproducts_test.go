@@ -74,16 +74,16 @@ func TestActiveProductIDs(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := activeProductIDs(tc.input)
+			got := ActiveProductIDs(tc.input)
 			sort.Strings(got)
 			want := append([]string(nil), tc.expected...)
 			sort.Strings(want)
 			if len(got) != len(want) {
-				t.Fatalf("activeProductIDs = %v, want %v", got, want)
+				t.Fatalf("ActiveProductIDs = %v, want %v", got, want)
 			}
 			for i := range got {
 				if got[i] != want[i] {
-					t.Fatalf("activeProductIDs = %v, want %v", got, want)
+					t.Fatalf("ActiveProductIDs = %v, want %v", got, want)
 				}
 			}
 		})

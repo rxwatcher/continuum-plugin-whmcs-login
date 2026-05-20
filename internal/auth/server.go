@@ -154,8 +154,8 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "fetch client products: %v", err)
 			}
-			ownedActive = activeProductIDs(prods)
-			if len(cfg.AllowedProductIDs) > 0 && !anyMatch(cfg.AllowedProductIDs, ownedActive) {
+			ownedActive = ActiveProductIDs(prods)
+			if len(cfg.AllowedProductIDs) > 0 && !AnyMatch(cfg.AllowedProductIDs, ownedActive) {
 				return nil, status.Error(codes.PermissionDenied,
 					"your WHMCS account doesn't have an allowed active product")
 			}
@@ -179,7 +179,7 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 		}
 
 		if len(ownedActive) > 0 {
-			claims["continuum_role"] = roleFromProducts(ownedActive, cfg.ClaimRoleMapping)
+			claims["continuum_role"] = RoleFromProducts(ownedActive, cfg.ClaimRoleMapping)
 		}
 	}
 
@@ -195,7 +195,7 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 	}, nil
 }
 
-// activeProductIDs returns the PIDs (as decimal strings) of products the
+// ActiveProductIDs returns the PIDs (as decimal strings) of products the
 // client owns with an Active-equivalent status.
 //
 // Treated as active:
@@ -210,7 +210,7 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 //     products, this allowlist needs to be extended.
 //   - Status != nil && *Status == "Suspended" | "Terminated" | "Cancelled" |
 //     "Fraud" | "Pending" (or anything else).
-func activeProductIDs(prods []whmcs.ClientProduct) []string {
+func ActiveProductIDs(prods []whmcs.ClientProduct) []string {
 	out := make([]string, 0, len(prods))
 	for _, p := range prods {
 		if p.Status == nil || strings.EqualFold(strings.TrimSpace(*p.Status), "Active") {
@@ -220,7 +220,7 @@ func activeProductIDs(prods []whmcs.ClientProduct) []string {
 	return out
 }
 
-func anyMatch(want, have []string) bool {
+func AnyMatch(want, have []string) bool {
 	for _, w := range want {
 		for _, h := range have {
 			if w == h {
@@ -231,7 +231,7 @@ func anyMatch(want, have []string) bool {
 	return false
 }
 
-func roleFromProducts(products []string, mappings []pluginrt.ClaimRoleMap) string {
+func RoleFromProducts(products []string, mappings []pluginrt.ClaimRoleMap) string {
 	role := "user"
 	for _, m := range mappings {
 		if m.Role != "admin" && m.Role != "user" {

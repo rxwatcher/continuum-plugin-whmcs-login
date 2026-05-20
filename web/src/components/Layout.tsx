@@ -1,5 +1,5 @@
 import { Outlet, NavLink } from "react-router";
-import { ArrowLeft, ListChecks, Settings as SettingsIcon } from "lucide-react";
+import { ArrowLeft, ListChecks, Settings as SettingsIcon, Stethoscope } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
@@ -89,6 +89,9 @@ function PluginNav() {
       </NavTab>
       <NavTab to="/settings" icon={<SettingsIcon className="size-4" />}>
         Settings
+      </NavTab>
+      <NavTab to="/diagnostics" icon={<Stethoscope className="size-4" />}>
+        Diagnostics
       </NavTab>
     </nav>
   );

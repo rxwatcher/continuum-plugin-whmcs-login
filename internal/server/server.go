@@ -59,6 +59,7 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/api/v1/admin/products/refresh", s.deps.Admin.HandleProductsRefresh)
 			r.Get("/api/v1/admin/config-summary", s.deps.Admin.HandleConfigSummary)
 			r.Patch("/api/v1/admin/config", s.deps.Admin.HandleUpdateConfig)
+			r.Post("/api/v1/admin/simulate-login", s.deps.Admin.HandleSimulateLogin)
 		})
 	}
 

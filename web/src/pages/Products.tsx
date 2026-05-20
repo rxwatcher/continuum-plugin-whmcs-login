@@ -1,6 +1,16 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, RefreshCw, Server, Settings, ShieldCheck, XCircle } from "lucide-react";
+import {
+  AlertCircle,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  RefreshCw,
+  Server,
+  Settings,
+  ShieldCheck,
+  XCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -21,7 +31,13 @@ import { copyText } from "@/lib/copyText";
 import { currentOAuthCallbackUrl } from "@/lib/oauthCallbackUrl";
 import ProductSelector, { type Product } from "@/components/ProductSelector";
 
-type ProductsResponse = { products: Product[]; cached_at: string; configured?: boolean };
+type ProductsResponse = {
+  products: Product[];
+  cached_at: string | null;
+  last_attempt_at?: string | null;
+  last_error?: string;
+  configured?: boolean;
+};
 type ConfigSummary = {
   allowed_product_ids: number[];
   whmcs_server_url: string;
@@ -187,7 +203,7 @@ export default function Products() {
 
   const products = productsQ.data?.products ?? [];
   const initialEnabled = configQ.data?.allowed_product_ids ?? [];
-  const cachedAt = productsQ.data?.cached_at;
+  const cachedAt = productsQ.data?.cached_at ?? undefined;
   const apiReady = !!configQ.data?.whmcs_admin_api_id && !!configQ.data?.has_whmcs_admin_api_secret;
   const productFetchConnected = isProductFetchConnected(apiReady, productsQ.data);
 
@@ -211,6 +227,16 @@ export default function Products() {
         refresh={() => refresh.mutate()}
         refreshing={refresh.isPending}
       />
+
+      {productFetchConnected && (
+        <EntitlementFreshness
+          cachedAt={productsQ.data?.cached_at ?? null}
+          lastAttemptAt={productsQ.data?.last_attempt_at ?? null}
+          lastError={productsQ.data?.last_error ?? ""}
+          refresh={() => refresh.mutate()}
+          refreshing={refresh.isPending}
+        />
+      )}
 
       <ProductSelector
         products={products}
@@ -531,5 +557,114 @@ function StatusPill({ label }: { label: string }) {
     <span className="border-border/70 bg-card text-muted-foreground hidden rounded-full border px-2.5 py-1 text-xs sm:inline-flex">
       {label}
     </span>
+  );
+}
+
+// EntitlementFreshness surfaces the WHMCS product-cache state to admins: how
+// long ago we last successfully fetched, whether the most recent attempt
+// failed (with the upstream error message), and a reminder that entitlement
+// is evaluated at login only.
+function EntitlementFreshness({
+  cachedAt,
+  lastAttemptAt,
+  lastError,
+  refresh,
+  refreshing,
+}: {
+  cachedAt: string | null;
+  lastAttemptAt: string | null;
+  lastError: string;
+  refresh: () => void;
+  refreshing: boolean;
+}) {
+  const cachedDate = cachedAt ? new Date(cachedAt) : null;
+  const attemptDate = lastAttemptAt ? new Date(lastAttemptAt) : null;
+  const stale =
+    !!cachedDate && Date.now() - cachedDate.getTime() > 30 * 60 * 1000; // >30 min
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Clock className="size-5" />
+          Entitlement freshness
+        </CardTitle>
+        <CardDescription>
+          Continuum evaluates WHMCS product ownership at sign-in. Stale data
+          here means active Continuum sessions are out of date with WHMCS until
+          users sign in again.
+        </CardDescription>
+        <CardAction>
+          <Button variant="outline" size="sm" onClick={refresh} disabled={refreshing}>
+            <RefreshCw
+              className={refreshing ? "mr-2 size-4 animate-spin" : "mr-2 size-4"}
+            />
+            Refresh now
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <FreshnessItem
+            label="Last successful sync"
+            value={cachedDate ? cachedDate.toLocaleString() : "never"}
+            ok={!!cachedDate && !stale}
+            warning={stale}
+          />
+          <FreshnessItem
+            label="Last refresh attempted"
+            value={
+              attemptDate ? attemptDate.toLocaleString() : "never"
+            }
+            ok={!!attemptDate && !lastError}
+          />
+        </div>
+        {lastError && (
+          <div className="border-destructive/30 bg-destructive/10 text-destructive flex gap-2 rounded-md border p-3 text-xs">
+            <AlertCircle className="mt-0.5 size-4 shrink-0" />
+            <div>
+              <div className="font-medium">Most recent refresh failed</div>
+              <div className="mt-1 break-all font-mono">{lastError}</div>
+              <div className="text-muted-foreground mt-1">
+                Showing the last known good list until the next successful
+                refresh.
+              </div>
+            </div>
+          </div>
+        )}
+        <div className="border-border/40 text-muted-foreground flex gap-2 rounded-md border p-3 text-xs">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <div>
+            <strong>Session-downgrade behaviour:</strong> if you remove a
+            product from the allow-list (or a user loses a product in WHMCS),
+            their existing Continuum sessions are <em>not</em> revoked. The
+            change takes effect the next time they sign in. Force a
+            re-evaluation by signing the user out from{" "}
+            <span className="font-mono">/admin/users</span>.
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function FreshnessItem({
+  label,
+  value,
+  ok,
+  warning,
+}: {
+  label: string;
+  value: string;
+  ok: boolean;
+  warning?: boolean;
+}) {
+  let tone = "mt-1 text-sm font-medium";
+  if (warning) tone = "mt-1 text-sm font-medium text-amber-500";
+  else if (ok) tone = "mt-1 text-sm font-medium text-green-500";
+  return (
+    <div className="border-border/70 rounded-md border p-3">
+      <div className="text-muted-foreground text-xs">{label}</div>
+      <div className={tone}>{value}</div>
+    </div>
   );
 }

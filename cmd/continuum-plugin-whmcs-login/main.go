@@ -128,6 +128,12 @@ func main() {
 				_, err := applyConfig(next)
 				return err
 			},
+			APIFactory: func(c pluginrt.Config) admin.WHMCSAPI {
+				if c.WHMCSAdminAPIID == "" || c.WHMCSAdminAPISecret == "" {
+					return nil
+				}
+				return whmcs.NewAPIClient(c.WHMCSServerURL, c.WHMCSAdminAPIID, c.WHMCSAdminAPISecret)
+			},
 		})
 
 		srv := server.New(server.Deps{

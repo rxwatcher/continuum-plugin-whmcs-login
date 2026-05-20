@@ -3,8 +3,10 @@ package admin_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +16,8 @@ import (
 	pluginrt "github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/runtime"
 	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/whmcs"
 )
+
+var errFake = errors.New("fake api outage")
 
 type fakeProductsFetcher struct {
 	out []whmcs.Product
@@ -43,8 +47,213 @@ func mountRouter(a *admin.Server) http.Handler {
 		r.Post("/api/v1/admin/products/refresh", a.HandleProductsRefresh)
 		r.Get("/api/v1/admin/config-summary", a.HandleConfigSummary)
 		r.Patch("/api/v1/admin/config", a.HandleUpdateConfig)
+		r.Post("/api/v1/admin/simulate-login", a.HandleSimulateLogin)
 	})
 	return r
+}
+
+// fakeWHMCSAPI implements admin.WHMCSAPI for HandleSimulateLogin tests.
+// Each method is a scripted return so tests can exercise success, lookup
+// failure, partial outage (e.g. details errors), and the "no client found"
+// branch independently.
+type fakeWHMCSAPI struct {
+	client       *whmcs.Client
+	clientErr    error
+	products     []whmcs.ClientProduct
+	productsErr  error
+	details      whmcs.ClientDetails
+	detailsErr   error
+	lastClientID string
+}
+
+func (f *fakeWHMCSAPI) GetClientByEmail(_ context.Context, _ string) (*whmcs.Client, error) {
+	return f.client, f.clientErr
+}
+func (f *fakeWHMCSAPI) GetClientsProducts(_ context.Context, id string) ([]whmcs.ClientProduct, error) {
+	f.lastClientID = id
+	return f.products, f.productsErr
+}
+func (f *fakeWHMCSAPI) GetClientsDetails(_ context.Context, id string) (whmcs.ClientDetails, error) {
+	f.lastClientID = id
+	return f.details, f.detailsErr
+}
+
+func newSimulatorServer(cfg pluginrt.Config, api admin.WHMCSAPI) *admin.Server {
+	return admin.NewServer(admin.Deps{
+		ConfigFn:   func() pluginrt.Config { return cfg },
+		APIFactory: func(_ pluginrt.Config) admin.WHMCSAPI { return api },
+	})
+}
+
+func adminCfg() pluginrt.Config {
+	return pluginrt.Config{
+		WHMCSServerURL:      "https://billing.example",
+		ClientID:            "cid",
+		ClientSecret:        "secret",
+		WHMCSAdminAPIID:     "api",
+		WHMCSAdminAPISecret: "api-secret",
+	}
+}
+
+func TestSimulateLogin_RequiresEmailOrClientID(t *testing.T) {
+	s := newSimulatorServer(adminCfg(), &fakeWHMCSAPI{})
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/admin/simulate-login", strings.NewReader(`{}`))
+	r.Header.Set("X-Continuum-User-Role", "admin")
+	r.Header.Set("Content-Type", "application/json")
+	mountRouter(s).ServeHTTP(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("code = %d, want 400", w.Code)
+	}
+}
+
+func TestSimulateLogin_AdminAPIUnconfigured_ReportsClearly(t *testing.T) {
+	cfg := adminCfg()
+	cfg.WHMCSAdminAPIID = ""
+	cfg.WHMCSAdminAPISecret = ""
+	s := newSimulatorServer(cfg, nil)
+	r := httptest.NewRequest("POST", "/api/v1/admin/simulate-login",
+		strings.NewReader(`{"client_id":"42"}`))
+	r.Header.Set("X-Continuum-User-Role", "admin")
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mountRouter(s).ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("code = %d", w.Code)
+	}
+	var resp map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["ok"] != false || resp["reason"] != "admin_api_required" {
+		t.Errorf("response = %v", resp)
+	}
+}
+
+func TestSimulateLogin_EmailLookup_NotFound(t *testing.T) {
+	api := &fakeWHMCSAPI{client: nil}
+	s := newSimulatorServer(adminCfg(), api)
+	r := httptest.NewRequest("POST", "/api/v1/admin/simulate-login",
+		strings.NewReader(`{"email":"unknown@example.com"}`))
+	r.Header.Set("X-Continuum-User-Role", "admin")
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mountRouter(s).ServeHTTP(w, r)
+	var resp map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["ok"] != false || resp["reason"] != "client_not_found" {
+		t.Errorf("response = %v", resp)
+	}
+}
+
+func TestSimulateLogin_GatePassesAndElevatesToAdmin(t *testing.T) {
+	active := "Active"
+	api := &fakeWHMCSAPI{
+		client: &whmcs.Client{ID: "100", Email: "ada@example.com"},
+		products: []whmcs.ClientProduct{
+			{PID: 5, Name: "Basic", Status: &active},
+			{PID: 12, Name: "Premium", Status: &active},
+		},
+		details: whmcs.ClientDetails{
+			ID:           "100",
+			Email:        "ada@example.com",
+			CustomFields: map[string]string{"Discord ID": "ada#1234"},
+		},
+	}
+	cfg := adminCfg()
+	cfg.AllowedProductIDs = []string{"5"}
+	cfg.ClaimRoleMapping = []pluginrt.ClaimRoleMap{
+		{ProductID: "12", Role: "admin"},
+	}
+	cfg.FetchDiscordID = true
+	s := newSimulatorServer(cfg, api)
+
+	r := httptest.NewRequest("POST", "/api/v1/admin/simulate-login",
+		strings.NewReader(`{"email":"ada@example.com"}`))
+	r.Header.Set("X-Continuum-User-Role", "admin")
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mountRouter(s).ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("code = %d", w.Code)
+	}
+	var resp map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["ok"] != true || resp["allowed"] != true || resp["role"] != "admin" {
+		t.Errorf("response = %v", resp)
+	}
+	if resp["discord_id"] != "ada#1234" {
+		t.Errorf("discord_id = %v", resp["discord_id"])
+	}
+}
+
+func TestSimulateLogin_NoAllowedProducts_GateRejects(t *testing.T) {
+	active := "Active"
+	api := &fakeWHMCSAPI{
+		client:   &whmcs.Client{ID: "200"},
+		products: []whmcs.ClientProduct{{PID: 99, Name: "Other", Status: &active}},
+	}
+	cfg := adminCfg()
+	cfg.AllowedProductIDs = []string{"5", "12"}
+	s := newSimulatorServer(cfg, api)
+	r := httptest.NewRequest("POST", "/api/v1/admin/simulate-login",
+		strings.NewReader(`{"client_id":"200"}`))
+	r.Header.Set("X-Continuum-User-Role", "admin")
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mountRouter(s).ServeHTTP(w, r)
+	var resp map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["allowed"] != false {
+		t.Errorf("allowed = %v, want false", resp["allowed"])
+	}
+}
+
+func TestSimulateLogin_OverridesUseUnsavedRules(t *testing.T) {
+	active := "Active"
+	api := &fakeWHMCSAPI{
+		client:   &whmcs.Client{ID: "300"},
+		products: []whmcs.ClientProduct{{PID: 7, Name: "X", Status: &active}},
+	}
+	// Live config doesn't allow PID 7; the request body overrides to allow it.
+	cfg := adminCfg()
+	cfg.AllowedProductIDs = []string{"99"}
+	s := newSimulatorServer(cfg, api)
+	body := `{"client_id":"300","allowed_product_ids":[7]}`
+	r := httptest.NewRequest("POST", "/api/v1/admin/simulate-login", strings.NewReader(body))
+	r.Header.Set("X-Continuum-User-Role", "admin")
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mountRouter(s).ServeHTTP(w, r)
+	var resp map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["allowed"] != true {
+		t.Errorf("override didn't take: allowed = %v", resp["allowed"])
+	}
+}
+
+func TestSimulateLogin_ClientDetailsErrorIsNonFatal(t *testing.T) {
+	active := "Active"
+	api := &fakeWHMCSAPI{
+		client:     &whmcs.Client{ID: "400"},
+		products:   []whmcs.ClientProduct{{PID: 5, Name: "X", Status: &active}},
+		detailsErr: errFake,
+	}
+	cfg := adminCfg()
+	cfg.AllowedProductIDs = []string{"5"}
+	s := newSimulatorServer(cfg, api)
+	r := httptest.NewRequest("POST", "/api/v1/admin/simulate-login",
+		strings.NewReader(`{"client_id":"400"}`))
+	r.Header.Set("X-Continuum-User-Role", "admin")
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mountRouter(s).ServeHTTP(w, r)
+	var resp map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["allowed"] != true {
+		t.Errorf("allowed = %v despite details outage", resp["allowed"])
+	}
+	if resp["client_details_error"] == "" || resp["client_details_error"] == nil {
+		t.Errorf("expected client_details_error to be surfaced, got %v", resp)
+	}
 }
 
 func TestWhoami_ReturnsRoleFromHeader(t *testing.T) {
