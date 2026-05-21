@@ -96,7 +96,14 @@ Role assignment is applied at login; product changes during an active session ta
 
 ## Detailed docs
 
-- [Setup, debugging, and communication flows](docs/setup-debug-flows.md)
+Operator deep-dives live under [`docs/`](docs/):
+
+- [WHMCS OAuth/OIDC client setup](docs/whmcs-oauth-setup.md)
+- [WHMCS admin API setup](docs/admin-api-setup.md)
+- [Product gating and role mapping](docs/product-gating-and-roles.md)
+- [Discord ID enrichment](docs/discord-id-enrichment.md)
+- [Debugging runbook](docs/debugging.md)
+- [WHMCS quirks and edge cases](docs/whmcs-quirks.md)
 
 ## Build and release
 
