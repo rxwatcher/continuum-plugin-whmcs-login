@@ -1,51 +1,89 @@
 # WHMCS Login for Continuum
 
-`continuum.whmcs-login` adds OAuth sign-in to Continuum using a WHMCS billing
-system. It can optionally allow only clients with specific active WHMCS
-products, fetch a Discord ID custom field, and map WHMCS product ownership to
-Continuum roles.
+`continuum.whmcs-login` is a Continuum auth provider that signs users in through a WHMCS billing system's OAuth/OIDC endpoints and gates access by active WHMCS product ownership.
 
-Use this plugin when WHMCS is your source of customer identity and entitlement.
-Use `continuum.oidc-login` when your identity provider supports standard OIDC.
+## Category
 
-## Detailed Operations Docs
+Lives under **Auth**.
 
-- [Setup, debugging, and communication flows](docs/setup-debug-flows.md)
+Use this plugin when WHMCS is your source of customer identity and entitlement. For a generic IdP, use [`continuum.oidc-login`](https://github.com/RXWatcher/continuum-plugin-oidc-login).
 
-## Features
+## Capabilities
 
-- OAuth2/PKCE login against WHMCS OAuth endpoints.
-- Per-install login-button display name.
-- Optional product gating.
-- Optional role mapping from WHMCS product IDs to Continuum roles.
-- Optional Discord ID lookup through a WHMCS client custom field.
-- Admin SPA for configuring products, role mapping, and diagnostics.
-- Stateless runtime; no plugin-owned Postgres schema is required.
+| Type | ID | Purpose |
+| --- | --- | --- |
+| `auth_provider.v1` | `whmcs` | OAuth2/PKCE sign-in against a WHMCS instance, with optional product-based entitlement and role mapping. |
+| `http_routes.v1` | `spa` | Admin SPA for configuring OAuth credentials, allowed products, role mapping, and diagnostics. |
 
-## Configuration
+HTTP routes registered by the plugin:
 
-| Key | Required | Description |
-|---|---|---|
-| `whmcs_server_url` | yes | WHMCS base URL, no trailing slash. HTTPS is required except for localhost testing. |
-| `client_id` | yes | WHMCS OAuth client ID. |
-| `client_secret` | yes | WHMCS OAuth client secret. |
-| `display_name` | no | Login-button label. |
-| `allowed_product_ids` | no | Comma-separated WHMCS product IDs. Empty allows all WHMCS accounts. |
-| `whmcs_admin_api_id` | conditional | Required for product gating and Discord ID lookup. |
-| `whmcs_admin_api_secret` | conditional | Required for product gating and Discord ID lookup. |
-| `fetch_discord_id` | no | Include the configured Discord ID custom field as a claim. |
-| `discord_id_custom_field` | no | WHMCS custom-field name. Defaults to `Discord ID`. |
-| `claim_role_mapping` | no | JSON array of `{product_id, role}` entries. |
+- `GET /assets/*` (public) — static assets (logo, etc.)
+- `GET /admin/*` (admin) — admin SPA, navigable as "WHMCS Login"
+- `* /api/v1/admin/*` (admin) — admin API consumed by the SPA
+- `GET /api/v1/health` (public) — liveness probe
 
-Redirect URI to register in WHMCS:
+## Dependencies
+
+Standalone Continuum auth provider. Requires:
+
+- A reachable WHMCS instance with an OAuth/OIDC client configured.
+- A Postgres database reachable from the plugin runtime, with a dedicated `whmcs_login` schema for the plugin's owned tables (config storage and migrations).
+- Optional: WHMCS admin API credentials, needed only when you want product gating or Discord ID enrichment.
+
+Host: [`ContinuumApp/continuum`](https://github.com/ContinuumApp/continuum). SDK: [`ContinuumApp/continuum-plugin-sdk`](https://github.com/ContinuumApp/continuum-plugin-sdk).
+
+## External services
+
+- **WHMCS OAuth/OIDC** — authorization, token exchange, and userinfo.
+- **WHMCS admin API** — optional, used to verify active product ownership and to look up the configured Discord ID custom field.
+
+## Auth flow
+
+1. The user picks "Sign in with WHMCS" on the Continuum login page.
+2. The plugin starts an OAuth2/PKCE authorization request against `whmcs_server_url`.
+3. WHMCS redirects back to `https://<continuum-host>/api/v1/auth/oauth/<install-id>/callback`.
+4. The plugin exchanges the code for tokens and fetches the WHMCS user.
+5. If `allowed_product_ids` is set, the plugin calls the WHMCS admin API to confirm the client has at least one matching active product; otherwise access is denied.
+6. If `fetch_discord_id` is on, the plugin reads the configured WHMCS custom field and exposes it as a claim.
+7. `claim_role_mapping` maps owned product IDs to Continuum roles (`user` or `admin`) for this login.
+8. The plugin returns identity, claims, and role to the Continuum host, which establishes the session.
+
+The redirect URI to register in WHMCS is per-install:
 
 ```text
 https://<continuum-host>/api/v1/auth/oauth/<install-id>/callback
 ```
 
-## Role Mapping
+## Allowed products
 
-`claim_role_mapping` is a JSON array. `role` must be `user` or `admin`.
+Product gating is configured per install through the admin SPA at `/admin/`. Operators pick WHMCS product IDs from a list fetched (and cached for five minutes) from the WHMCS admin API; the SPA includes a refresh action that invalidates the cache on demand.
+
+Behavior:
+
+- Empty list — any WHMCS account can sign in.
+- Non-empty list — only clients with at least one active subscription matching one of those product IDs can sign in. All other accounts are rejected at the callback.
+
+Role mapping uses the same set of product IDs: each entry in `claim_role_mapping` pins a product ID to either the `user` or `admin` role, evaluated at every login.
+
+## Configuration
+
+The plugin global config is persisted by the plugin itself (in its own schema) and edited from the admin SPA. The only host-managed value is the database connection string.
+
+| Key | Required | Description |
+| --- | --- | --- |
+| `database_url` | yes | Postgres DSN for the dedicated `whmcs_login` schema. |
+| `whmcs_server_url` | yes | WHMCS base URL, no trailing slash. HTTPS required except for localhost. |
+| `client_id` | yes | WHMCS OAuth client ID. |
+| `client_secret` | yes | WHMCS OAuth client secret. |
+| `display_name` | no | Label shown on the Continuum login button. |
+| `allowed_product_ids` | no | Comma-separated WHMCS product IDs. Empty allows any WHMCS account. |
+| `whmcs_admin_api_id` | conditional | Required for product gating and Discord ID lookup. |
+| `whmcs_admin_api_secret` | conditional | Required for product gating and Discord ID lookup. |
+| `fetch_discord_id` | no | If true, includes the configured custom field as a claim. |
+| `discord_id_custom_field` | no | WHMCS custom-field name. Defaults to `Discord ID`. |
+| `claim_role_mapping` | no | JSON array of `{product_id, role}` entries; `role` must be `user` or `admin`. |
+
+Example `claim_role_mapping`:
 
 ```json
 [
@@ -54,22 +92,17 @@ https://<continuum-host>/api/v1/auth/oauth/<install-id>/callback
 ]
 ```
 
-Role assignment is applied at login. If a client's WHMCS products change during
-an active session, the new role applies after the next sign-in.
+Role assignment is applied at login; product changes during an active session take effect on next sign-in.
 
-## Setup
+## Detailed docs
 
-1. Register an OAuth client in WHMCS.
-2. Install this plugin and note its installation ID.
-3. Configure the WHMCS redirect URI using that install ID.
-4. Open the plugin admin page and enter server URL, OAuth credentials, product
-   gating, and role mapping.
-5. Test with a non-admin client account before enabling product gates broadly.
+- [Setup, debugging, and communication flows](docs/setup-debug-flows.md)
 
-## Build And Test
+## Build and release
 
 ```bash
-make build
-make test
-make test-web
+make build      # builds web SPA and the Go binary
+make test       # go test ./... and the web tests
 ```
+
+CI builds linux-amd64 binaries on push to main via the reusable workflow in [RXWatcher/continuum-plugin-repository](https://github.com/RXWatcher/continuum-plugin-repository) and publishes them to the catalog at [`./binaries/`](https://github.com/RXWatcher/continuum-plugin-repository/tree/main/binaries).
