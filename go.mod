@@ -1,4 +1,4 @@
-module github.com/ContinuumApp/continuum-plugin-whmcs-login
+module github.com/RXWatcher/continuum-plugin-whmcs-login
 
 go 1.26.0
 

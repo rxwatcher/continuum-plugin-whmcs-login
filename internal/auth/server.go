@@ -16,8 +16,8 @@ import (
 
 	pluginv1 "github.com/ContinuumApp/continuum-plugin-sdk/pkg/pluginproto/continuum/plugin/v1"
 
-	pluginrt "github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/runtime"
-	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/whmcs"
+	pluginrt "github.com/RXWatcher/continuum-plugin-whmcs-login/internal/runtime"
+	"github.com/RXWatcher/continuum-plugin-whmcs-login/internal/whmcs"
 )
 
 // ConfigFn returns the live in-process Config. It is invoked on every RPC so

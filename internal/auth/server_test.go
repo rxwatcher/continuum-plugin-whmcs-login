@@ -14,8 +14,8 @@ import (
 
 	pluginv1 "github.com/ContinuumApp/continuum-plugin-sdk/pkg/pluginproto/continuum/plugin/v1"
 
-	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/auth"
-	pluginrt "github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/runtime"
+	"github.com/RXWatcher/continuum-plugin-whmcs-login/internal/auth"
+	pluginrt "github.com/RXWatcher/continuum-plugin-whmcs-login/internal/runtime"
 )
 
 func newAuthServer(cfg pluginrt.Config) *auth.Server {

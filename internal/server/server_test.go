@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/server"
+	"github.com/RXWatcher/continuum-plugin-whmcs-login/internal/server"
 )
 
 func TestHealthOK(t *testing.T) {

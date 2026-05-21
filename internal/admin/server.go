@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	pluginauth "github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/auth"
-	pluginrt "github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/runtime"
-	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/whmcs"
+	pluginauth "github.com/RXWatcher/continuum-plugin-whmcs-login/internal/auth"
+	pluginrt "github.com/RXWatcher/continuum-plugin-whmcs-login/internal/runtime"
+	"github.com/RXWatcher/continuum-plugin-whmcs-login/internal/whmcs"
 )
 
 // APIFactory returns a freshly-constructed admin API client using the live

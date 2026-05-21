@@ -22,14 +22,14 @@ import (
 	publicmanifest "github.com/ContinuumApp/continuum-plugin-sdk/pkg/pluginsdk/manifest"
 	sdkruntime "github.com/ContinuumApp/continuum-plugin-sdk/pkg/pluginsdk/runtime"
 
-	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/admin"
-	pluginauth "github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/auth"
-	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/httproutes"
-	pluginrt "github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/runtime"
-	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/server"
-	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/store"
-	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/whmcs"
-	"github.com/ContinuumApp/continuum-plugin-whmcs-login/web"
+	"github.com/RXWatcher/continuum-plugin-whmcs-login/internal/admin"
+	pluginauth "github.com/RXWatcher/continuum-plugin-whmcs-login/internal/auth"
+	"github.com/RXWatcher/continuum-plugin-whmcs-login/internal/httproutes"
+	pluginrt "github.com/RXWatcher/continuum-plugin-whmcs-login/internal/runtime"
+	"github.com/RXWatcher/continuum-plugin-whmcs-login/internal/server"
+	"github.com/RXWatcher/continuum-plugin-whmcs-login/internal/store"
+	"github.com/RXWatcher/continuum-plugin-whmcs-login/internal/whmcs"
+	"github.com/RXWatcher/continuum-plugin-whmcs-login/web"
 )
 
 //go:embed manifest.json

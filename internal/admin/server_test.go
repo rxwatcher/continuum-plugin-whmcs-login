@@ -12,9 +12,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/admin"
-	pluginrt "github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/runtime"
-	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/whmcs"
+	"github.com/RXWatcher/continuum-plugin-whmcs-login/internal/admin"
+	pluginrt "github.com/RXWatcher/continuum-plugin-whmcs-login/internal/runtime"
+	"github.com/RXWatcher/continuum-plugin-whmcs-login/internal/whmcs"
 )
 
 var errFake = errors.New("fake api outage")

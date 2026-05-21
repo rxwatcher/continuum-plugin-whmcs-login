@@ -4,7 +4,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/ContinuumApp/continuum-plugin-whmcs-login/internal/whmcs"
+	"github.com/RXWatcher/continuum-plugin-whmcs-login/internal/whmcs"
 )
 
 // TestActiveProductIDs pins the field-presence semantics for ClientProduct.Status
