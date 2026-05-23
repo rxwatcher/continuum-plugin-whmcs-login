@@ -38,7 +38,7 @@ func TestHandleSPA_InjectsThemeAndBaseHref(t *testing.T) {
 	s := New(Deps{SPAFiles: spa})
 
 	r := httptest.NewRequest(http.MethodGet, "/admin/products", nil)
-	r.Header.Set("X-Continuum-Theme", "dark")
+	r.Header.Set("X-Silo-Theme", "dark")
 	w := httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, r)
 

@@ -1,0 +1,80 @@
+{
+  "plugin_id": "silo.whmcs-login",
+  "version": "1.0.3",
+  "checksum": "__CHECKSUM__",
+  "silo_api_version": "v1",
+  "category": "Auth",
+  "supported_platforms": [
+    {
+      "os": "linux",
+      "arch": "amd64"
+    }
+  ],
+  "capabilities": [
+    {
+      "type": "auth_provider.v1",
+      "id": "whmcs",
+      "display_name": "Sign in with WHMCS",
+      "description": "OAuth/OIDC auth against a WHMCS billing system.",
+      "auth_modes": [
+        "oauth2"
+      ],
+      "icon_url": "/assets/whmcs-logo.svg"
+    },
+    {
+      "type": "http_routes.v1",
+      "id": "spa",
+      "display_name": "WHMCS Login admin",
+      "description": "Admin SPA for configuring allowed products."
+    }
+  ],
+  "http_routes": [
+    {
+      "id": "assets",
+      "method": "GET",
+      "path": "/assets/*",
+      "access": "public"
+    },
+    {
+      "id": "admin_html",
+      "method": "GET",
+      "path": "/admin/*",
+      "access": "admin",
+      "navigable": true,
+      "navigation_label": "WHMCS Login",
+      "navigation_kind": "admin"
+    },
+    {
+      "id": "admin_api",
+      "method": "*",
+      "path": "/api/v1/admin/*",
+      "access": "admin"
+    },
+    {
+      "id": "health",
+      "method": "GET",
+      "path": "/api/v1/health",
+      "access": "public"
+    }
+  ],
+  "global_config_schema": [
+    {
+      "key": "database_url",
+      "title": "Postgres connection string",
+      "description": "DSN for the dedicated whmcs_login schema (e.g. postgres://plugin_whmcs_login:...@host:5432/silo?search_path=whmcs_login&sslmode=disable).",
+      "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}},\"required\":[\"value\"]}",
+      "required": true,
+      "admin_form": {
+        "fields": [
+          {
+            "key": "value",
+            "label": "Connection URL",
+            "control": "ADMIN_FORM_CONTROL_PASSWORD",
+            "required": true,
+            "secret": true
+          }
+        ]
+      }
+    }
+  ]
+}

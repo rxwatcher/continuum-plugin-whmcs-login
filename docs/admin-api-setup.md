@@ -17,7 +17,7 @@ this page.
 
 In WHMCS admin: Setup -> Staff Management -> Administrator Roles.
 
-Create a role (e.g. `Continuum API`) with the minimum surface needed:
+Create a role (e.g. `Silo API`) with the minimum surface needed:
 
 | API action | Reason |
 | --- | --- |
@@ -40,7 +40,7 @@ In WHMCS admin: Setup -> Staff Management -> Administrator Users.
   - **API Identifier** — set in the plugin as `whmcs_admin_api_id`.
   - **API Secret** — set in the plugin as `whmcs_admin_api_secret`. Capture
     this immediately; WHMCS does not display it again on most builds.
-- Restrict the API user's allowed IP list to the egress IP of the Continuum
+- Restrict the API user's allowed IP list to the egress IP of the Silo
   plugin host. WHMCS supports IP allowlisting on API credentials.
 
 ## 3. Wire the credentials in the plugin
@@ -75,7 +75,7 @@ Two different failure modes are worth distinguishing.
 
 ### Credentials are not set at all
 
-- `applyConfig` in `cmd/continuum-plugin-whmcs-login/main.go` constructs no
+- `applyConfig` in `cmd/silo-plugin-whmcs-login/main.go` constructs no
   product cache (`prodCache` stays `nil`).
 - `GET /api/v1/admin/products` returns a 200 with
   `{"configured": false, "message": "WHMCS admin API credentials are
@@ -101,7 +101,7 @@ Two different failure modes are worth distinguishing.
   `{"ok": false, "reason": "client_lookup_failed", "error": "<whmcs
   message>"}` or similar at whichever step first calls the API.
 - A real login attempt fails with `Internal` from `ExchangeCode` with the
-  WHMCS message. Users see a generic "login failed" page from the Continuum
+  WHMCS message. Users see a generic "login failed" page from the Silo
   host; the WHMCS message only appears in the plugin's logs.
 
 ### Common causes of "wrong"
@@ -109,7 +109,7 @@ Two different failure modes are worth distinguishing.
 - API user not assigned the role, or the role is missing one of the four
   actions listed above. WHMCS reports this as `Authentication Failed for
   ...` even though the credentials are valid.
-- IP allowlist on the API user does not include the Continuum plugin host's
+- IP allowlist on the API user does not include the Silo plugin host's
   egress IP. WHMCS reports `IP Address ... is not on the IP Allow List`.
 - The plugin host is behind a NAT or load balancer and the egress IP is not
   what you think. Test from the plugin runtime, not from your laptop.

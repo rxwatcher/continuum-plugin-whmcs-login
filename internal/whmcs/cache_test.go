@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/RXWatcher/continuum-plugin-whmcs-login/internal/whmcs"
+	"github.com/RXWatcher/silo-plugin-whmcs-login/internal/whmcs"
 )
 
 type fakeProductsFetcher struct {

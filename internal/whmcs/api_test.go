@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/RXWatcher/continuum-plugin-whmcs-login/internal/whmcs"
+	"github.com/RXWatcher/silo-plugin-whmcs-login/internal/whmcs"
 )
 
 func TestGetProducts_PostsExpectedFields(t *testing.T) {

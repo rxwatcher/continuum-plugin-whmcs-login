@@ -1,5 +1,5 @@
 {
-  "name": "continuum-plugin-whmcs-login-web",
+  "name": "silo-plugin-whmcs-login-web",
   "private": true,
   "version": "0.1.0",
   "type": "module",

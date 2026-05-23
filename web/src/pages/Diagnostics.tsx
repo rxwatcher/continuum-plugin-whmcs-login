@@ -151,7 +151,7 @@ export default function Diagnostics() {
           <div className="text-muted-foreground border-border/40 border-t pt-3 text-xs">
             <strong>Note:</strong> entitlements are evaluated only at sign-in.
             If you remove a product from the allow-list, users with active
-            Continuum sessions keep their access until they sign in again.
+            Silo sessions keep their access until they sign in again.
           </div>
         </CardContent>
       </Card>
@@ -197,7 +197,7 @@ function SimResult({ result }: { result: SimulateResponse }) {
         {result.ok && (
           <div className="text-muted-foreground text-xs">
             Role mapping rules evaluated: {result.role_mapping_count ?? 0}.
-            Resulting Continuum role:{" "}
+            Resulting Silo role:{" "}
             <span className="font-mono">{result.role ?? "user"}</span>.
           </div>
         )}

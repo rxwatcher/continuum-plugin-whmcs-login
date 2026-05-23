@@ -1,4 +1,4 @@
-/continuum-plugin-whmcs-login
+/silo-plugin-whmcs-login
 *.test
 *.out
 .envrc

@@ -1,6 +1,6 @@
 // Package admin serves the plugin's admin HTTP endpoints. The SPA at /admin
 // (Phase 12+) calls into these. All endpoints except /whoami are gated on the
-// host-injected X-Continuum-User-Role: admin header.
+// host-injected X-Silo-User-Role: admin header.
 //
 // See spec Layer 4.9 for the endpoint contract.
 package admin
@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	pluginauth "github.com/RXWatcher/continuum-plugin-whmcs-login/internal/auth"
-	pluginrt "github.com/RXWatcher/continuum-plugin-whmcs-login/internal/runtime"
-	"github.com/RXWatcher/continuum-plugin-whmcs-login/internal/whmcs"
+	pluginauth "github.com/RXWatcher/silo-plugin-whmcs-login/internal/auth"
+	pluginrt "github.com/RXWatcher/silo-plugin-whmcs-login/internal/runtime"
+	"github.com/RXWatcher/silo-plugin-whmcs-login/internal/whmcs"
 )
 
 // APIFactory returns a freshly-constructed admin API client using the live
@@ -51,12 +51,12 @@ type Server struct {
 func NewServer(d Deps) *Server { return &Server{deps: d} }
 
 // RequireAdmin is a chi middleware that 403s any request without
-// X-Continuum-User-Role: admin. Use it on every endpoint EXCEPT /whoami,
+// X-Silo-User-Role: admin. Use it on every endpoint EXCEPT /whoami,
 // which deliberately admits non-admins so the SPA can render an "admin
 // required" notice instead of a 403 page.
 func (s *Server) RequireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Continuum-User-Role") != "admin" {
+		if r.Header.Get("X-Silo-User-Role") != "admin" {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
@@ -69,9 +69,9 @@ func (s *Server) RequireAdmin(next http.Handler) http.Handler {
 // already authenticated by the time it forwards the request).
 func (s *Server) HandleWhoami(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"user_id": r.Header.Get("X-Continuum-User-Id"),
-		"role":    r.Header.Get("X-Continuum-User-Role"),
-		"theme":   r.Header.Get("X-Continuum-User-Theme"),
+		"user_id": r.Header.Get("X-Silo-User-Id"),
+		"role":    r.Header.Get("X-Silo-User-Role"),
+		"theme":   r.Header.Get("X-Silo-User-Theme"),
 	})
 }
 

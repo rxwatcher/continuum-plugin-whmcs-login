@@ -4,14 +4,14 @@ These are deep-dive operator docs. For the high-level overview, the auth-flow
 summary, the configuration key reference, and the build/release section, read
 the [top-level README](../README.md) first.
 
-This tree assumes you are running the plugin under Continuum and have admin
-access to both the Continuum admin UI and the upstream WHMCS instance.
+This tree assumes you are running the plugin under Silo and have admin
+access to both the Silo admin UI and the upstream WHMCS instance.
 
 ## Where to start
 
 | If you are doing this... | Read this |
 | --- | --- |
-| First-time install on a fresh Continuum host | [whmcs-oauth-setup.md](whmcs-oauth-setup.md), then [admin-api-setup.md](admin-api-setup.md) |
+| First-time install on a fresh Silo host | [whmcs-oauth-setup.md](whmcs-oauth-setup.md), then [admin-api-setup.md](admin-api-setup.md) |
 | Wiring product gating or role mapping | [product-gating-and-roles.md](product-gating-and-roles.md) |
 | Adding the Discord ID claim | [discord-id-enrichment.md](discord-id-enrichment.md) |
 | Login fails / users denied / wrong role | [debugging.md](debugging.md) |
@@ -19,8 +19,8 @@ access to both the Continuum admin UI and the upstream WHMCS instance.
 
 ## What this plugin is
 
-`continuum.whmcs-login` is an `auth_provider.v1` plugin that authenticates
-Continuum users against a WHMCS billing system using its OAuth2/PKCE endpoints
+`silo.whmcs-login` is an `auth_provider.v1` plugin that authenticates
+Silo users against a WHMCS billing system using its OAuth2/PKCE endpoints
 and, optionally, gates access by active product ownership reported by the
 WHMCS admin API. The admin SPA at `/admin/` is the operator's primary
 interface.
@@ -37,7 +37,7 @@ whmcs_login.app_config
 ```
 
 The plugin owns this schema and runs migrations on every Configure. Do not
-share this schema with other plugins or the Continuum core.
+share this schema with other plugins or the Silo core.
 
 ## Things that are not here
 

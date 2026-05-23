@@ -589,8 +589,8 @@ function EntitlementFreshness({
           Entitlement freshness
         </CardTitle>
         <CardDescription>
-          Continuum evaluates WHMCS product ownership at sign-in. Stale data
-          here means active Continuum sessions are out of date with WHMCS until
+          Silo evaluates WHMCS product ownership at sign-in. Stale data
+          here means active Silo sessions are out of date with WHMCS until
           users sign in again.
         </CardDescription>
         <CardAction>
@@ -636,7 +636,7 @@ function EntitlementFreshness({
           <div>
             <strong>Session-downgrade behaviour:</strong> if you remove a
             product from the allow-list (or a user loses a product in WHMCS),
-            their existing Continuum sessions are <em>not</em> revoked. The
+            their existing Silo sessions are <em>not</em> revoked. The
             change takes effect the next time they sign in. Force a
             re-evaluation by signing the user out from{" "}
             <span className="font-mono">/admin/users</span>.

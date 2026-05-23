@@ -15,7 +15,7 @@ when at least one of these conditions holds:
 
 If none of those is true, the plugin authenticates the user purely from the
 OAuth userinfo response and never touches `/includes/api.php`. The plugin
-returns the user's role as whatever the Continuum host's default is — see
+returns the user's role as whatever the Silo host's default is — see
 the host's role-on-create policy.
 
 ## Resolving the WHMCS client
@@ -68,7 +68,7 @@ Decision at login:
 - Failure to intersect -> `PermissionDenied: your WHMCS account doesn't
   have an allowed active product`.
 
-The user-facing error message in Continuum may be generic — the actual
+The user-facing error message in Silo may be generic — the actual
 reason is in the plugin's logs.
 
 ## How `claim_role_mapping` resolves the role
@@ -88,9 +88,9 @@ elevates the user, regardless of other mappings or order. Mappings with a
 role other than `"user"` / `"admin"` are silently ignored; `ValidateConfig`
 rejects such entries at Configure time so they shouldn't get this far.
 
-The role is exposed as the `continuum_role` claim on the
-`AuthenticateResponse`. The Continuum host is what actually uses this — see
-the host's role-mapping logic for how it translates the claim to a Continuum
+The role is exposed as the `silo_role` claim on the
+`AuthenticateResponse`. The Silo host is what actually uses this — see
+the host's role-mapping logic for how it translates the claim to a Silo
 role. The plugin only emits the claim.
 
 Role is computed every login. If you change a user's products in WHMCS,
@@ -101,7 +101,7 @@ until they expire.
 
 `internal/whmcs/cache.go` keeps the WHMCS product list (the output of
 `GetProducts`) in process memory for 5 minutes (`productCacheTTL` in
-`cmd/continuum-plugin-whmcs-login/main.go`).
+`cmd/silo-plugin-whmcs-login/main.go`).
 
 This cache backs the SPA's product picker only. **It is not on the login
 path.** Each login triggers fresh `GetClientsProducts` calls because per-user

@@ -12,10 +12,10 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	pluginv1 "github.com/ContinuumApp/continuum-plugin-sdk/pkg/pluginproto/continuum/plugin/v1"
+	pluginv1 "github.com/ContinuumApp/continuum-plugin-sdk/pkg/pluginproto/silo/plugin/v1"
 
-	"github.com/RXWatcher/continuum-plugin-whmcs-login/internal/auth"
-	pluginrt "github.com/RXWatcher/continuum-plugin-whmcs-login/internal/runtime"
+	"github.com/RXWatcher/silo-plugin-whmcs-login/internal/auth"
+	pluginrt "github.com/RXWatcher/silo-plugin-whmcs-login/internal/runtime"
 )
 
 func newAuthServer(cfg pluginrt.Config) *auth.Server {
@@ -439,8 +439,8 @@ func TestExchangeCode_RoleMapping_AdminAppliedFromOwnedProduct(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExchangeCode: %v", err)
 	}
-	if got := resp.GetClaims().AsMap()["continuum_role"]; got != "admin" {
-		t.Errorf("continuum_role = %v, want admin", got)
+	if got := resp.GetClaims().AsMap()["silo_role"]; got != "admin" {
+		t.Errorf("silo_role = %v, want admin", got)
 	}
 }
 
@@ -484,8 +484,8 @@ func TestExchangeCode_RoleMapping_IgnoresMalformedRoleEntries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExchangeCode: %v", err)
 	}
-	if got := resp.GetClaims().AsMap()["continuum_role"]; got != "user" {
-		t.Errorf("continuum_role = %v, want user (malformed entry must not elevate)", got)
+	if got := resp.GetClaims().AsMap()["silo_role"]; got != "user" {
+		t.Errorf("silo_role = %v, want user (malformed entry must not elevate)", got)
 	}
 }
 

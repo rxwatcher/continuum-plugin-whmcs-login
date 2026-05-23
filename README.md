@@ -1,12 +1,12 @@
-# WHMCS Login for Continuum
+# WHMCS Login for Silo
 
-`continuum.whmcs-login` is a Continuum auth provider that signs users in through a WHMCS billing system's OAuth/OIDC endpoints and gates access by active WHMCS product ownership.
+`silo.whmcs-login` is a Silo auth provider that signs users in through a WHMCS billing system's OAuth/OIDC endpoints and gates access by active WHMCS product ownership.
 
 ## Category
 
 Lives under **Auth**.
 
-Use this plugin when WHMCS is your source of customer identity and entitlement. For a generic IdP, use [`continuum.oidc-login`](https://github.com/RXWatcher/continuum-plugin-oidc-login).
+Use this plugin when WHMCS is your source of customer identity and entitlement. For a generic IdP, use [`silo.oidc-login`](https://github.com/RXWatcher/silo-plugin-oidc-login).
 
 ## Capabilities
 
@@ -24,13 +24,13 @@ HTTP routes registered by the plugin:
 
 ## Dependencies
 
-Standalone Continuum auth provider. Requires:
+Standalone Silo auth provider. Requires:
 
 - A reachable WHMCS instance with an OAuth/OIDC client configured.
 - A Postgres database reachable from the plugin runtime, with a dedicated `whmcs_login` schema for the plugin's owned tables (config storage and migrations).
 - Optional: WHMCS admin API credentials, needed only when you want product gating or Discord ID enrichment.
 
-Host: [`ContinuumApp/continuum`](https://github.com/ContinuumApp/continuum). SDK: [`ContinuumApp/continuum-plugin-sdk`](https://github.com/ContinuumApp/continuum-plugin-sdk).
+Host: [`ContinuumApp/silo`](https://github.com/ContinuumApp/silo). SDK: [`ContinuumApp/continuum-plugin-sdk`](https://github.com/ContinuumApp/continuum-plugin-sdk).
 
 ## External services
 
@@ -39,19 +39,19 @@ Host: [`ContinuumApp/continuum`](https://github.com/ContinuumApp/continuum). SDK
 
 ## Auth flow
 
-1. The user picks "Sign in with WHMCS" on the Continuum login page.
+1. The user picks "Sign in with WHMCS" on the Silo login page.
 2. The plugin starts an OAuth2/PKCE authorization request against `whmcs_server_url`.
-3. WHMCS redirects back to `https://<continuum-host>/api/v1/auth/oauth/<install-id>/callback`.
+3. WHMCS redirects back to `https://<silo-host>/api/v1/auth/oauth/<install-id>/callback`.
 4. The plugin exchanges the code for tokens and fetches the WHMCS user.
 5. If `allowed_product_ids` is set, the plugin calls the WHMCS admin API to confirm the client has at least one matching active product; otherwise access is denied.
 6. If `fetch_discord_id` is on, the plugin reads the configured WHMCS custom field and exposes it as a claim.
-7. `claim_role_mapping` maps owned product IDs to Continuum roles (`user` or `admin`) for this login.
-8. The plugin returns identity, claims, and role to the Continuum host, which establishes the session.
+7. `claim_role_mapping` maps owned product IDs to Silo roles (`user` or `admin`) for this login.
+8. The plugin returns identity, claims, and role to the Silo host, which establishes the session.
 
 The redirect URI to register in WHMCS is per-install:
 
 ```text
-https://<continuum-host>/api/v1/auth/oauth/<install-id>/callback
+https://<silo-host>/api/v1/auth/oauth/<install-id>/callback
 ```
 
 ## Allowed products
@@ -75,7 +75,7 @@ The plugin global config is persisted by the plugin itself (in its own schema) a
 | `whmcs_server_url` | yes | WHMCS base URL, no trailing slash. HTTPS required except for localhost. |
 | `client_id` | yes | WHMCS OAuth client ID. |
 | `client_secret` | yes | WHMCS OAuth client secret. |
-| `display_name` | no | Label shown on the Continuum login button. |
+| `display_name` | no | Label shown on the Silo login button. |
 | `allowed_product_ids` | no | Comma-separated WHMCS product IDs. Empty allows any WHMCS account. |
 | `whmcs_admin_api_id` | conditional | Required for product gating and Discord ID lookup. |
 | `whmcs_admin_api_secret` | conditional | Required for product gating and Discord ID lookup. |
@@ -112,4 +112,4 @@ make build      # builds web SPA and the Go binary
 make test       # go test ./... and the web tests
 ```
 
-CI builds linux-amd64 binaries on push to main via the reusable workflow in [RXWatcher/continuum-plugin-repository](https://github.com/RXWatcher/continuum-plugin-repository) and publishes them to the catalog at [`./binaries/`](https://github.com/RXWatcher/continuum-plugin-repository/tree/main/binaries).
+CI builds linux-amd64 binaries on push to main via the reusable workflow in [RXWatcher/silo-plugin-repository](https://github.com/RXWatcher/silo-plugin-repository) and publishes them to the catalog at [`./binaries/`](https://github.com/RXWatcher/silo-plugin-repository/tree/main/binaries).

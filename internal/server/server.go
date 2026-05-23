@@ -23,7 +23,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/RXWatcher/continuum-plugin-whmcs-login/internal/admin"
+	"github.com/RXWatcher/silo-plugin-whmcs-login/internal/admin"
 )
 
 // Deps holds the dependencies main.go provides. All fields are optional —

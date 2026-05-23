@@ -44,7 +44,7 @@ func computeBaseHref(reqPath string) string {
 
 // handleSPA serves index.html with `data-theme="<theme>"` injected on the
 // <html> element and a `<base href>` tag injected in <head>. The theme is
-// read from the host-injected X-Continuum-Theme header (preferred) or the
+// read from the host-injected X-Silo-Theme header (preferred) or the
 // ?theme= query string (fallback for direct nav).
 //
 // Cache-Control: no-store — the theme varies per request.
@@ -69,7 +69,7 @@ func (s *Server) handleSPA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	theme := r.Header.Get("X-Continuum-Theme")
+	theme := r.Header.Get("X-Silo-Theme")
 	if theme == "" {
 		theme = r.URL.Query().Get("theme")
 	}

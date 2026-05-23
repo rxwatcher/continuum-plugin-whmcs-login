@@ -1,7 +1,7 @@
 # WHMCS OAuth/OIDC client setup
 
 This is the WHMCS-side configuration the plugin needs to authenticate users.
-Do this once per Continuum install that connects to a given WHMCS instance.
+Do this once per Silo install that connects to a given WHMCS instance.
 
 ## Prerequisites
 
@@ -10,17 +10,17 @@ Do this once per Continuum install that connects to a given WHMCS instance.
   server) in the core; on older 7.x deployments it may need to be enabled
   under Setup -> Apps & Integrations -> OpenID Connect.
 - Admin login on that WHMCS instance.
-- The Continuum host's externally reachable HTTPS URL.
-- The install ID of this plugin install in Continuum. Find it in the
-  Continuum admin UI on the plugin's install detail page; the URL contains
+- The Silo host's externally reachable HTTPS URL.
+- The install ID of this plugin install in Silo. Find it in the
+  Silo admin UI on the plugin's install detail page; the URL contains
   it, and the install page exposes the per-install callback path.
 
 ## 1. Compose the redirect URI
 
-The redirect URI is fixed by Continuum and is per-install:
+The redirect URI is fixed by Silo and is per-install:
 
 ```
-https://<continuum-host>/api/v1/auth/oauth/<install-id>/callback
+https://<silo-host>/api/v1/auth/oauth/<install-id>/callback
 ```
 
 Notes:
@@ -29,7 +29,7 @@ Notes:
   the WHMCS server URL itself is on `localhost` / a loopback address; the
   redirect URI restrictions are enforced by WHMCS, not by this plugin.
 - The path is literal — no trailing slash, no query string, no fragment.
-- If you reinstall the plugin in Continuum, the install ID changes. You must
+- If you reinstall the plugin in Silo, the install ID changes. You must
   update the redirect URI in WHMCS or logins will fail with a redirect_uri
   mismatch.
 
@@ -40,7 +40,7 @@ In WHMCS admin:
 1. Setup -> Apps & Integrations -> OpenID Connect (or "Identity Provider", or
    under System Settings on newer builds).
 2. Create a new Identity Client / OAuth client. Settings:
-   - **Name**: anything operator-friendly, e.g. `Continuum`.
+   - **Name**: anything operator-friendly, e.g. `Silo`.
    - **Identifier / Client ID**: WHMCS will generate this; keep it.
    - **Secret**: WHMCS will generate this; copy it immediately, it will only
      be shown once on most builds.
@@ -58,7 +58,7 @@ In WHMCS admin:
 
 ## 3. Configure the plugin
 
-In Continuum admin -> Plugins -> WHMCS Login -> Install -> admin SPA at
+In Silo admin -> Plugins -> WHMCS Login -> Install -> admin SPA at
 `/admin/`:
 
 | Field | Value |
@@ -66,19 +66,19 @@ In Continuum admin -> Plugins -> WHMCS Login -> Install -> admin SPA at
 | WHMCS server URL | The WHMCS base URL, no trailing slash, e.g. `https://billing.example.com`. The plugin trims trailing slashes; it appends `/oauth/authorize.php`, `/oauth/token.php`, `/oauth/userinfo.php`, and `/includes/api.php` itself. |
 | Client ID | From WHMCS. |
 | Client secret | From WHMCS. Write-only via the admin form — the SPA never displays it. |
-| Display name | The label shown on the Continuum login button. Optional. |
+| Display name | The label shown on the Silo login button. Optional. |
 
-The connection string (`database_url`) is set by the Continuum host, not via
+The connection string (`database_url`) is set by the Silo host, not via
 the SPA. Point it at a Postgres role with create-table rights inside the
 `whmcs_login` schema only.
 
 ## 4. Smoke test
 
-1. Sign out of Continuum (or use an incognito window).
+1. Sign out of Silo (or use an incognito window).
 2. Click the WHMCS sign-in button.
 3. You should be sent to `https://<whmcs>/oauth/authorize.php?...`. Confirm
    the consent screen renders.
-4. After consenting, you should land back on the Continuum host and be
+4. After consenting, you should land back on the Silo host and be
    signed in.
 
 If step 3 errors out with `invalid_redirect_uri`, the URI in WHMCS does not

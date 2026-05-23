@@ -6,7 +6,7 @@ between them. Use this with `internal/auth/server.go` and the SPA's
 
 ## First-pass checks
 
-1. **Is the install enabled?** Continuum admin -> Plugins. A disabled
+1. **Is the install enabled?** Silo admin -> Plugins. A disabled
    install does not register routes, so `/admin/` 404s.
 2. **Health probe.** `curl https://<host>/api/v1/health` should return
    `{"ok":true}`. If it doesn't, the plugin process isn't serving HTTP at
@@ -26,10 +26,10 @@ between them. Use this with `internal/auth/server.go` and the SPA's
 
 | Symptom | Most likely cause | Fix |
 | --- | --- | --- |
-| WHMCS shows `invalid_redirect_uri` before consent | Redirect URI in WHMCS doesn't match Continuum exactly | Re-check scheme, host, port, install ID. The install ID changes if you reinstall the plugin. |
-| WHMCS consent screen completes, Continuum shows generic login error | Token exchange failed | Look in plugin log for `token exchange:` — WHMCS returns the reason verbatim. Common: wrong client secret, wrong allowed grant types, PKCE disabled on the client. |
+| WHMCS shows `invalid_redirect_uri` before consent | Redirect URI in WHMCS doesn't match Silo exactly | Re-check scheme, host, port, install ID. The install ID changes if you reinstall the plugin. |
+| WHMCS consent screen completes, Silo shows generic login error | Token exchange failed | Look in plugin log for `token exchange:` — WHMCS returns the reason verbatim. Common: wrong client secret, wrong allowed grant types, PKCE disabled on the client. |
 | Plugin log shows `state mismatch` | The `state` parameter didn't round-trip. Browser dropped a cookie, multiple tabs raced, or the install ID changed mid-flow | Have the user try again in a clean window. |
-| Plugin log shows `missing pkce_verifier in provider_state` | Continuum host did not preserve `provider_state` across the redirect | Check Continuum host version / configuration. The plugin places the verifier in `provider_state`; the host must round-trip it to the callback. |
+| Plugin log shows `missing pkce_verifier in provider_state` | Silo host did not preserve `provider_state` across the redirect | Check Silo host version / configuration. The plugin places the verifier in `provider_state`; the host must round-trip it to the callback. |
 | Plugin log shows `userinfo response missing subject` | WHMCS returned a userinfo payload without `sub` or `id` | OAuth Identity Provider misconfigured on WHMCS — confirm scopes include `openid`. |
 
 ## "Valid customers are denied"
@@ -139,7 +139,7 @@ The plugin owns the `whmcs_login` schema with a single table
 | Admin SPA HTTP handlers | `internal/admin/server.go` |
 | Config parsing + validation | `internal/runtime/runtime.go` |
 | Persistence (`app_config` JSONB) | `internal/store/store.go` |
-| Process wiring (Configure -> apply -> HTTP handler) | `cmd/continuum-plugin-whmcs-login/main.go` |
+| Process wiring (Configure -> apply -> HTTP handler) | `cmd/silo-plugin-whmcs-login/main.go` |
 | Chi router / route registration | `internal/server/server.go` |
 </content>
 </invoke>

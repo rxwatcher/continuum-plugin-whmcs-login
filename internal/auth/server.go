@@ -14,10 +14,10 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	pluginv1 "github.com/ContinuumApp/continuum-plugin-sdk/pkg/pluginproto/continuum/plugin/v1"
+	pluginv1 "github.com/ContinuumApp/continuum-plugin-sdk/pkg/pluginproto/silo/plugin/v1"
 
-	pluginrt "github.com/RXWatcher/continuum-plugin-whmcs-login/internal/runtime"
-	"github.com/RXWatcher/continuum-plugin-whmcs-login/internal/whmcs"
+	pluginrt "github.com/RXWatcher/silo-plugin-whmcs-login/internal/runtime"
+	"github.com/RXWatcher/silo-plugin-whmcs-login/internal/whmcs"
 )
 
 // ConfigFn returns the live in-process Config. It is invoked on every RPC so
@@ -42,7 +42,7 @@ func (s *Server) Authenticate(_ context.Context, _ *pluginv1.AuthenticateRequest
 }
 
 // RefreshSession is not supported in v1 — users re-authenticate via the full
-// OAuth flow when their continuum session expires.
+// OAuth flow when their silo session expires.
 func (s *Server) RefreshSession(_ context.Context, _ *pluginv1.RefreshSessionRequest) (*pluginv1.AuthenticateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "refresh not supported in v1")
 }
@@ -127,7 +127,7 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 			"given_name":  ui.GivenName,
 			"family_name": ui.FamilyName,
 		},
-		"continuum_link_by_email": true,
+		"silo_link_by_email": true,
 	}
 
 	if len(cfg.AllowedProductIDs) > 0 || len(cfg.ClaimRoleMapping) > 0 || cfg.FetchDiscordID {
@@ -179,7 +179,7 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 		}
 
 		if len(ownedActive) > 0 {
-			claims["continuum_role"] = RoleFromProducts(ownedActive, cfg.ClaimRoleMapping)
+			claims["silo_role"] = RoleFromProducts(ownedActive, cfg.ClaimRoleMapping)
 		}
 	}
 

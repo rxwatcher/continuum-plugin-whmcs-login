@@ -12,9 +12,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/RXWatcher/continuum-plugin-whmcs-login/internal/admin"
-	pluginrt "github.com/RXWatcher/continuum-plugin-whmcs-login/internal/runtime"
-	"github.com/RXWatcher/continuum-plugin-whmcs-login/internal/whmcs"
+	"github.com/RXWatcher/silo-plugin-whmcs-login/internal/admin"
+	pluginrt "github.com/RXWatcher/silo-plugin-whmcs-login/internal/runtime"
+	"github.com/RXWatcher/silo-plugin-whmcs-login/internal/whmcs"
 )
 
 var errFake = errors.New("fake api outage")
@@ -99,7 +99,7 @@ func TestSimulateLogin_RequiresEmailOrClientID(t *testing.T) {
 	s := newSimulatorServer(adminCfg(), &fakeWHMCSAPI{})
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/api/v1/admin/simulate-login", strings.NewReader(`{}`))
-	r.Header.Set("X-Continuum-User-Role", "admin")
+	r.Header.Set("X-Silo-User-Role", "admin")
 	r.Header.Set("Content-Type", "application/json")
 	mountRouter(s).ServeHTTP(w, r)
 	if w.Code != http.StatusBadRequest {
@@ -114,7 +114,7 @@ func TestSimulateLogin_AdminAPIUnconfigured_ReportsClearly(t *testing.T) {
 	s := newSimulatorServer(cfg, nil)
 	r := httptest.NewRequest("POST", "/api/v1/admin/simulate-login",
 		strings.NewReader(`{"client_id":"42"}`))
-	r.Header.Set("X-Continuum-User-Role", "admin")
+	r.Header.Set("X-Silo-User-Role", "admin")
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mountRouter(s).ServeHTTP(w, r)
@@ -133,7 +133,7 @@ func TestSimulateLogin_EmailLookup_NotFound(t *testing.T) {
 	s := newSimulatorServer(adminCfg(), api)
 	r := httptest.NewRequest("POST", "/api/v1/admin/simulate-login",
 		strings.NewReader(`{"email":"unknown@example.com"}`))
-	r.Header.Set("X-Continuum-User-Role", "admin")
+	r.Header.Set("X-Silo-User-Role", "admin")
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mountRouter(s).ServeHTTP(w, r)
@@ -168,7 +168,7 @@ func TestSimulateLogin_GatePassesAndElevatesToAdmin(t *testing.T) {
 
 	r := httptest.NewRequest("POST", "/api/v1/admin/simulate-login",
 		strings.NewReader(`{"email":"ada@example.com"}`))
-	r.Header.Set("X-Continuum-User-Role", "admin")
+	r.Header.Set("X-Silo-User-Role", "admin")
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mountRouter(s).ServeHTTP(w, r)
@@ -196,7 +196,7 @@ func TestSimulateLogin_NoAllowedProducts_GateRejects(t *testing.T) {
 	s := newSimulatorServer(cfg, api)
 	r := httptest.NewRequest("POST", "/api/v1/admin/simulate-login",
 		strings.NewReader(`{"client_id":"200"}`))
-	r.Header.Set("X-Continuum-User-Role", "admin")
+	r.Header.Set("X-Silo-User-Role", "admin")
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mountRouter(s).ServeHTTP(w, r)
@@ -219,7 +219,7 @@ func TestSimulateLogin_OverridesUseUnsavedRules(t *testing.T) {
 	s := newSimulatorServer(cfg, api)
 	body := `{"client_id":"300","allowed_product_ids":[7]}`
 	r := httptest.NewRequest("POST", "/api/v1/admin/simulate-login", strings.NewReader(body))
-	r.Header.Set("X-Continuum-User-Role", "admin")
+	r.Header.Set("X-Silo-User-Role", "admin")
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mountRouter(s).ServeHTTP(w, r)
@@ -242,7 +242,7 @@ func TestSimulateLogin_ClientDetailsErrorIsNonFatal(t *testing.T) {
 	s := newSimulatorServer(cfg, api)
 	r := httptest.NewRequest("POST", "/api/v1/admin/simulate-login",
 		strings.NewReader(`{"client_id":"400"}`))
-	r.Header.Set("X-Continuum-User-Role", "admin")
+	r.Header.Set("X-Silo-User-Role", "admin")
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mountRouter(s).ServeHTTP(w, r)
@@ -259,8 +259,8 @@ func TestSimulateLogin_ClientDetailsErrorIsNonFatal(t *testing.T) {
 func TestWhoami_ReturnsRoleFromHeader(t *testing.T) {
 	s := newAdminServer(pluginrt.Config{}, nil)
 	r := httptest.NewRequest("GET", "/api/v1/admin/whoami", nil)
-	r.Header.Set("X-Continuum-User-Id", "u-1")
-	r.Header.Set("X-Continuum-User-Role", "admin")
+	r.Header.Set("X-Silo-User-Id", "u-1")
+	r.Header.Set("X-Silo-User-Role", "admin")
 	w := httptest.NewRecorder()
 	mountRouter(s).ServeHTTP(w, r)
 	if w.Code != http.StatusOK {
@@ -278,7 +278,7 @@ func TestWhoami_AllowedWithoutAdminRole(t *testing.T) {
 	// whether to render the "admin required" notice.
 	s := newAdminServer(pluginrt.Config{}, nil)
 	r := httptest.NewRequest("GET", "/api/v1/admin/whoami", nil)
-	r.Header.Set("X-Continuum-User-Role", "user")
+	r.Header.Set("X-Silo-User-Role", "user")
 	w := httptest.NewRecorder()
 	mountRouter(s).ServeHTTP(w, r)
 	if w.Code != http.StatusOK {
@@ -289,7 +289,7 @@ func TestWhoami_AllowedWithoutAdminRole(t *testing.T) {
 func TestProducts_RejectsNonAdmin(t *testing.T) {
 	s := newAdminServer(pluginrt.Config{}, []whmcs.Product{{PID: 1, Name: "A"}})
 	r := httptest.NewRequest("GET", "/api/v1/admin/products", nil)
-	r.Header.Set("X-Continuum-User-Role", "user")
+	r.Header.Set("X-Silo-User-Role", "user")
 	w := httptest.NewRecorder()
 	mountRouter(s).ServeHTTP(w, r)
 	if w.Code != http.StatusForbidden {
@@ -300,7 +300,7 @@ func TestProducts_RejectsNonAdmin(t *testing.T) {
 func TestProducts_ReturnsListForAdmin(t *testing.T) {
 	s := newAdminServer(pluginrt.Config{}, []whmcs.Product{{PID: 1, Name: "A"}})
 	r := httptest.NewRequest("GET", "/api/v1/admin/products", nil)
-	r.Header.Set("X-Continuum-User-Role", "admin")
+	r.Header.Set("X-Silo-User-Role", "admin")
 	w := httptest.NewRecorder()
 	mountRouter(s).ServeHTTP(w, r)
 	if w.Code != http.StatusOK {
@@ -318,7 +318,7 @@ func TestProducts_ReturnsListForAdmin(t *testing.T) {
 func TestProductsRefresh_RefetchesCache(t *testing.T) {
 	s := newAdminServer(pluginrt.Config{}, []whmcs.Product{{PID: 1, Name: "A"}})
 	r := httptest.NewRequest("POST", "/api/v1/admin/products/refresh", nil)
-	r.Header.Set("X-Continuum-User-Role", "admin")
+	r.Header.Set("X-Silo-User-Role", "admin")
 	w := httptest.NewRecorder()
 	mountRouter(s).ServeHTTP(w, r)
 	if w.Code != http.StatusOK {
@@ -329,7 +329,7 @@ func TestProductsRefresh_RefetchesCache(t *testing.T) {
 func TestProducts_NoCacheReturnsSetupPayload(t *testing.T) {
 	a := admin.NewServer(admin.Deps{ConfigFn: func() pluginrt.Config { return pluginrt.Config{} }})
 	r := httptest.NewRequest("GET", "/api/v1/admin/products", nil)
-	r.Header.Set("X-Continuum-User-Role", "admin")
+	r.Header.Set("X-Silo-User-Role", "admin")
 	w := httptest.NewRecorder()
 	mountRouter(a).ServeHTTP(w, r)
 	if w.Code != http.StatusOK {
@@ -363,7 +363,7 @@ func TestConfigSummary_RedactsSecrets(t *testing.T) {
 	}
 	s := newAdminServer(cfg, nil)
 	r := httptest.NewRequest("GET", "/api/v1/admin/config-summary", nil)
-	r.Header.Set("X-Continuum-User-Role", "admin")
+	r.Header.Set("X-Silo-User-Role", "admin")
 	w := httptest.NewRecorder()
 	mountRouter(s).ServeHTTP(w, r)
 	if w.Code != http.StatusOK {

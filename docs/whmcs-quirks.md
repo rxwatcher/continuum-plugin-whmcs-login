@@ -109,7 +109,7 @@ in WHMCS:
 - `openid` is mandatory — without it, `userinfo.sub` is empty and the
   plugin rejects the login with `userinfo response missing subject`.
 - `profile` populates `name`, `given_name`, `family_name`, `picture`.
-  Optional but recommended; lack of it means Continuum can't render a
+  Optional but recommended; lack of it means Silo can't render a
   display name beyond the email.
 - `email` populates `email`. Strongly recommended — without it,
   `GetClientByEmail` can't run, so the plugin falls back to using the
@@ -134,7 +134,7 @@ Never disable PKCE for this client — there is no fallback path.
 
 The plugin's `RefreshSession` RPC returns `Unimplemented`. If WHMCS issues
 a refresh token (because the client allows it), the plugin discards it.
-Continuum handles session renewal on its own, by re-running the OAuth flow.
+Silo handles session renewal on its own, by re-running the OAuth flow.
 Don't bother enabling refresh_token on the WHMCS client.
 
 ## "OAuth Server" vs older "OpenID Connect" module
@@ -153,16 +153,16 @@ the bundled one.
 ## Reverse-proxy gotchas
 
 The plugin exposes four route prefixes (`/assets/*`, `/admin/*`,
-`/api/v1/admin/*`, `/api/v1/health`). Continuum's host already proxies
+`/api/v1/admin/*`, `/api/v1/health`). Silo's host already proxies
 plugin routes; you don't normally need to do anything. But if you run an
-edge reverse proxy in front of Continuum:
+edge reverse proxy in front of Silo:
 
 - `/admin/*` must forward unchanged, including the `*` trailing path
   segments. The SPA is a single-page app and uses HTML5 history routing.
 - `/api/v1/admin/*` must forward the request method and JSON body. PATCH is
   used by config updates; some restrictive proxies disable PATCH by default.
-- The `X-Continuum-User-Role`, `X-Continuum-User-Id`, and
-  `X-Continuum-User-Theme` headers are injected by the Continuum host. Do
+- The `X-Silo-User-Role`, `X-Silo-User-Id`, and
+  `X-Silo-User-Theme` headers are injected by the Silo host. Do
   not pass them through from an external client — the admin middleware
   trusts them, and the host strips them on inbound requests. An edge proxy
   must do the same.

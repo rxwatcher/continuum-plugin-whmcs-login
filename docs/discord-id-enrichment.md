@@ -3,7 +3,7 @@
 The plugin can lift a single WHMCS custom field value off the authenticated
 client and expose it on the `AuthenticateResponse` as the `discord_id`
 claim. This is the only optional claim the plugin emits beyond
-`raw_userinfo`, `products`, and `continuum_role`.
+`raw_userinfo`, `products`, and `silo_role`.
 
 ## Prerequisites
 

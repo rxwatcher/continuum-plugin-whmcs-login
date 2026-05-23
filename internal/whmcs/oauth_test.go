@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/RXWatcher/continuum-plugin-whmcs-login/internal/whmcs"
+	"github.com/RXWatcher/silo-plugin-whmcs-login/internal/whmcs"
 )
 
 func TestPKCE_GeneratesValidVerifierAndChallenge(t *testing.T) {
