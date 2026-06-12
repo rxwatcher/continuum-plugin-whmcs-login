@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
+
 	pluginauth "github.com/RXWatcher/silo-plugin-whmcs-login/internal/auth"
 	pluginrt "github.com/RXWatcher/silo-plugin-whmcs-login/internal/runtime"
 	"github.com/RXWatcher/silo-plugin-whmcs-login/internal/whmcs"
@@ -40,15 +42,25 @@ type Deps struct {
 	// APIFactory builds a WHMCS admin API client from the supplied config.
 	// nil disables the simulate-login endpoint (returns a clear message).
 	APIFactory APIFactory
+	// Logger receives admin audit lines (config mutations). Optional; a null
+	// logger is used when omitted.
+	Logger hclog.Logger
 }
 
 // Server holds the wired deps and exposes individual handler funcs +
 // middleware that internal/server composes into the chi router.
 type Server struct {
 	deps Deps
+	log  hclog.Logger
 }
 
-func NewServer(d Deps) *Server { return &Server{deps: d} }
+func NewServer(d Deps) *Server {
+	log := d.Logger
+	if log == nil {
+		log = hclog.NewNullLogger()
+	}
+	return &Server{deps: d, log: log}
+}
 
 // RequireAdmin is a chi middleware that 403s any request without
 // X-Silo-User-Role: admin. Use it on every endpoint EXCEPT /whoami,
@@ -207,44 +219,65 @@ func (s *Server) HandleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid JSON body"})
 		return
 	}
+	// Track which fields the request set so the audit line records exactly what
+	// an admin mutated. Only field NAMES are logged — never values — so no
+	// secret or PII (server URL, client id, etc.) leaks into the audit log.
+	var fields []string
 	if req.WHMCSServerURL != nil {
 		cur.WHMCSServerURL = strings.TrimRight(strings.TrimSpace(*req.WHMCSServerURL), "/")
+		fields = append(fields, "whmcs_server_url")
 	}
 	if req.ClientID != nil {
 		cur.ClientID = strings.TrimSpace(*req.ClientID)
+		fields = append(fields, "client_id")
 	}
 	if req.DisplayName != nil {
 		cur.DisplayName = strings.TrimSpace(*req.DisplayName)
+		fields = append(fields, "display_name")
 	}
 	if req.IconURLPath != nil {
 		cur.IconURLPath = strings.TrimSpace(*req.IconURLPath)
+		fields = append(fields, "icon_url_path")
 	}
 	if req.AllowedProductIDs != nil {
 		cur.AllowedProductIDs = make([]string, 0, len(*req.AllowedProductIDs))
 		for _, id := range *req.AllowedProductIDs {
 			cur.AllowedProductIDs = append(cur.AllowedProductIDs, strconv.Itoa(id))
 		}
+		fields = append(fields, "allowed_product_ids")
 	}
 	if req.WHMCSAdminAPIID != nil {
 		cur.WHMCSAdminAPIID = strings.TrimSpace(*req.WHMCSAdminAPIID)
+		fields = append(fields, "whmcs_admin_api_id")
 	}
 	if req.FetchDiscordID != nil {
 		cur.FetchDiscordID = *req.FetchDiscordID
+		fields = append(fields, "fetch_discord_id")
 	}
 	if req.DiscordIDCustomField != nil {
 		cur.DiscordIDCustomField = strings.TrimSpace(*req.DiscordIDCustomField)
+		fields = append(fields, "discord_id_custom_field")
 	}
 	if req.ClaimRoleMapping != nil {
 		cur.ClaimRoleMapping = *req.ClaimRoleMapping
+		fields = append(fields, "claim_role_mapping")
 	}
 	if req.LinkByEmail != nil {
 		cur.LinkByEmail = *req.LinkByEmail
+		fields = append(fields, "link_by_email")
 	}
 	cur.DatabaseURL = ""
 	if err := s.deps.UpdateConfigFn(r.Context(), cur); err != nil {
+		s.log.Info("admin config update rejected",
+			"actor", r.Header.Get("X-Silo-User-Id"),
+			"fields", strings.Join(fields, ","),
+			"error", err.Error())
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 		return
 	}
+	s.log.Info("admin config updated",
+		"actor", r.Header.Get("X-Silo-User-Id"),
+		"fields", strings.Join(fields, ","))
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
