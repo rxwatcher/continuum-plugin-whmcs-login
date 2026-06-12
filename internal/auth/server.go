@@ -1,7 +1,8 @@
 // Package auth implements the auth_provider.v1 gRPC service: InitAuthorize
-// (kicks off PKCE OAuth against WHMCS) and ExchangeCode (token exchange +
-// userinfo + optional product gating / Discord ID fetch). Authenticate and
-// RefreshSession return Unimplemented per spec Layer 4.6/4.7.
+// (kicks off PKCE OAuth against WHMCS), ExchangeCode (token exchange + userinfo
+// + optional product gating / Discord ID fetch), and RefreshSession (silent
+// re-auth via a stored WHMCS refresh_token). Authenticate (password) returns
+// Unimplemented — the manifest declares oauth2 only.
 package auth
 
 import (
@@ -26,10 +27,27 @@ import (
 // gRPC server.
 type ConfigFn func() pluginrt.Config
 
+// EntitlementAPI is the subset of the WHMCS admin API the auth flow needs for
+// product gating + Discord ID resolution. The shared, coalescing +
+// negative-caching whmcs.EntitlementResolver satisfies the lookup methods;
+// GetClientsDetails passes through to the underlying client.
+type EntitlementAPI interface {
+	GetClientByEmail(ctx context.Context, email string) (*whmcs.Client, error)
+	GetClientsProducts(ctx context.Context, clientID string) ([]whmcs.ClientProduct, error)
+	GetClientsDetails(ctx context.Context, clientID string) (whmcs.ClientDetails, error)
+}
+
+// APIFn returns the shared entitlement API client for the live config. Returning
+// nil signals that admin API credentials are not configured. Supplied by
+// main.go so the auth flow reuses one coalescing resolver across logins; when
+// omitted (tests), the server falls back to a fresh per-call whmcs.APIClient.
+type APIFn func(cfg pluginrt.Config) EntitlementAPI
+
 // Server implements pluginv1.AuthProviderServer.
 type Server struct {
 	pluginv1.UnimplementedAuthProviderServer
 	cfgFn ConfigFn
+	apiFn APIFn
 	log   hclog.Logger
 }
 
@@ -44,16 +62,82 @@ func NewServer(cfgFn ConfigFn, log ...hclog.Logger) *Server {
 	return &Server{cfgFn: cfgFn, log: l}
 }
 
+// SetAPIFn installs the shared entitlement-API accessor. main.go calls this so
+// the auth flow reuses the process-wide coalescing/negative-caching resolver.
+func (s *Server) SetAPIFn(fn APIFn) { s.apiFn = fn }
+
+// entitlementAPI returns the entitlement API client for cfg, preferring the
+// shared resolver from apiFn and falling back to a freshly-built APIClient.
+func (s *Server) entitlementAPI(cfg pluginrt.Config) EntitlementAPI {
+	if s.apiFn != nil {
+		if api := s.apiFn(cfg); api != nil {
+			return api
+		}
+	}
+	if cfg.WHMCSAdminAPIID == "" || cfg.WHMCSAdminAPISecret == "" {
+		return nil
+	}
+	return whmcs.NewAPIClient(cfg.WHMCSServerURL, cfg.WHMCSAdminAPIID, cfg.WHMCSAdminAPISecret)
+}
+
 // Authenticate (password) is not supported — manifest declares oauth2 only.
 func (s *Server) Authenticate(_ context.Context, _ *pluginv1.AuthenticateRequest) (*pluginv1.AuthenticateResponse, error) {
 	return nil, status.Error(codes.Unimplemented,
 		"WHMCS plugin is OAuth-only; use InitAuthorize / ExchangeCode")
 }
 
-// RefreshSession is not supported in v1 — users re-authenticate via the full
-// OAuth flow when their silo session expires.
-func (s *Server) RefreshSession(_ context.Context, _ *pluginv1.RefreshSessionRequest) (*pluginv1.AuthenticateResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "refresh not supported in v1")
+// refreshTokenClaim is the claim key under which ExchangeCode stashes the WHMCS
+// refresh_token. The host persists AuthenticateResponse claims and round-trips
+// them into RefreshSessionRequest.refresh_state, giving us a place to recover
+// the refresh_token without a fresh OAuth round-trip.
+const refreshTokenClaim = "whmcs_refresh_token"
+
+// RefreshSession refreshes a previously-issued session using the WHMCS
+// refresh_token the host round-tripped via refresh_state. It performs a
+// grant_type=refresh_token swap, re-fetches userinfo, re-runs the same product
+// gating / role mapping / Discord resolution as ExchangeCode, and returns the
+// refreshed identity. When no refresh_token is present (older sessions, or a
+// WHMCS that didn't issue one) it returns Unimplemented so the host falls back
+// to a full re-authentication.
+func (s *Server) RefreshSession(ctx context.Context, req *pluginv1.RefreshSessionRequest) (*pluginv1.AuthenticateResponse, error) {
+	cfg := s.cfgFn()
+	if cfg.WHMCSServerURL == "" || cfg.ClientID == "" || cfg.ClientSecret == "" {
+		return nil, status.Error(codes.FailedPrecondition, "plugin not configured")
+	}
+
+	refreshToken := ""
+	if st := req.GetRefreshState(); st != nil {
+		refreshToken, _ = st.AsMap()[refreshTokenClaim].(string)
+	}
+	refreshToken = strings.TrimSpace(refreshToken)
+	if refreshToken == "" {
+		// No stored refresh_token: tell the host to re-run the full OAuth flow.
+		return nil, status.Error(codes.Unimplemented,
+			"no WHMCS refresh_token available; full re-authentication required")
+	}
+
+	tok, err := whmcs.RefreshAccessToken(ctx, whmcs.RefreshParams{
+		ServerURL:    cfg.WHMCSServerURL,
+		ClientID:     cfg.ClientID,
+		ClientSecret: cfg.ClientSecret,
+		RefreshToken: refreshToken,
+	})
+	if err != nil {
+		s.audit("deny", "", req.GetExternalSubject(), "refresh-failed", err.Error())
+		return nil, status.Errorf(codes.Unauthenticated, "refresh token: %v", err)
+	}
+	// WHMCS may rotate the refresh_token; carry the freshest one forward so the
+	// next refresh uses it. Fall back to the prior token when none is returned.
+	nextRefresh := tok.RefreshToken
+	if nextRefresh == "" {
+		nextRefresh = refreshToken
+	}
+
+	ui, err := whmcs.FetchUserInfo(ctx, cfg.WHMCSServerURL, tok.AccessToken)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "userinfo: %v", err)
+	}
+	return s.buildResponse(ctx, cfg, ui, nextRefresh)
 }
 
 // InitAuthorize generates a PKCE verifier+challenge, builds the upstream
@@ -132,6 +216,15 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 		return nil, status.Errorf(codes.Internal, "userinfo: %v", err)
 	}
 
+	return s.buildResponse(ctx, cfg, ui, tok.RefreshToken)
+}
+
+// buildResponse runs the entitlement evaluation (client resolution, product
+// gating, role mapping, Discord ID) shared by ExchangeCode and RefreshSession,
+// audits the allow/deny decision, and assembles the AuthenticateResponse. When
+// refreshToken is non-empty it is carried back in the claims so the host can
+// round-trip it into a future RefreshSession.
+func (s *Server) buildResponse(ctx context.Context, cfg pluginrt.Config, ui whmcs.UserInfo, refreshToken string) (*pluginv1.AuthenticateResponse, error) {
 	claims := map[string]any{
 		"raw_userinfo": map[string]any{
 			"sub":         ui.Sub,
@@ -143,6 +236,11 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 			"family_name": ui.FamilyName,
 		},
 	}
+	// Carry the WHMCS refresh_token (if any) so the host can persist it and
+	// round-trip it into RefreshSession, enabling silent session refresh.
+	if rt := strings.TrimSpace(refreshToken); rt != "" {
+		claims[refreshTokenClaim] = rt
+	}
 	// Account linking by (unverified) email is an account-takeover vector, so it
 	// is gated behind an explicit admin opt-in (default off).
 	if cfg.LinkByEmail {
@@ -150,17 +248,18 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 	}
 
 	if len(cfg.AllowedProductIDs) > 0 || len(cfg.ClaimRoleMapping) > 0 || cfg.FetchDiscordID {
-		if cfg.WHMCSAdminAPIID == "" || cfg.WHMCSAdminAPISecret == "" {
+		api := s.entitlementAPI(cfg)
+		if api == nil {
 			return nil, status.Error(codes.FailedPrecondition,
 				"admin API credentials required for product gating / Discord ID fetch")
 		}
-		api := whmcs.NewAPIClient(cfg.WHMCSServerURL, cfg.WHMCSAdminAPIID, cfg.WHMCSAdminAPISecret)
 		// Prefer the authenticated WHMCS client id from userinfo. Only fall back
 		// to an email lookup when userinfo did not carry an id — resolving the
 		// client by the unverified email is weaker and is the last resort.
 		clientID := ui.ID
 		if clientID == "" {
 			if ui.Email == "" {
+				s.audit("deny", ui.Email, ui.Sub, "no-client", "userinfo carried neither client id nor email")
 				return nil, status.Error(codes.PermissionDenied,
 					"WHMCS userinfo carried neither client id nor email")
 			}
@@ -169,6 +268,7 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 				return nil, status.Errorf(codes.Internal, "fetch client by email: %v", err)
 			}
 			if client == nil || client.ID == "" {
+				s.audit("deny", ui.Email, ui.Sub, "no-client", "no WHMCS client found for email")
 				return nil, status.Error(codes.PermissionDenied, "no WHMCS client found for this email")
 			}
 			clientID = client.ID
@@ -182,6 +282,8 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 			}
 			ownedActive = ActiveProductIDs(prods)
 			if len(cfg.AllowedProductIDs) > 0 && !AnyMatch(cfg.AllowedProductIDs, ownedActive) {
+				s.audit("deny", ui.Email, ui.Sub, "product-gate-failed",
+					"no allowed active product (client "+clientID+")")
 				return nil, status.Error(codes.PermissionDenied,
 					"your WHMCS account doesn't have an allowed active product")
 			}
@@ -217,12 +319,30 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "encode claims: %v", err)
 	}
+	s.audit("allow", ui.Email, ui.Sub, "success", "")
 	return &pluginv1.AuthenticateResponse{
 		ExternalSubject: ui.Sub,
 		DisplayName:     ui.Name,
 		Email:           ui.Email,
 		Claims:          cs,
 	}, nil
+}
+
+// audit emits a structured auth decision log line. decision is "allow" or
+// "deny"; reason is a short machine-friendly tag (success / no-client /
+// product-gate-failed / refresh-failed). The email + subject identify the
+// actor. No tokens or secrets are ever logged here.
+func (s *Server) audit(decision, email, subject, reason, detail string) {
+	args := []any{
+		"decision", decision,
+		"reason", reason,
+		"subject", subject,
+		"email", email,
+	}
+	if detail != "" {
+		args = append(args, "detail", detail)
+	}
+	s.log.Info("auth decision", args...)
 }
 
 // ActiveProductIDs returns the PIDs (as decimal strings) of products the

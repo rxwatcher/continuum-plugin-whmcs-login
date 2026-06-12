@@ -677,10 +677,121 @@ func TestAuthenticate_ReturnsUnimplemented(t *testing.T) {
 	}
 }
 
-func TestRefreshSession_ReturnsUnimplemented(t *testing.T) {
+func TestRefreshSession_UnconfiguredFailsPrecondition(t *testing.T) {
 	s := newAuthServer(pluginrt.Config{})
 	_, err := s.RefreshSession(context.Background(), &pluginv1.RefreshSessionRequest{})
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Errorf("code = %v, want FailedPrecondition; err = %v", status.Code(err), err)
+	}
+}
+
+func TestRefreshSession_NoRefreshTokenReturnsUnimplemented(t *testing.T) {
+	// A configured plugin with no stored refresh_token must tell the host to
+	// fall back to a full OAuth round-trip (Unimplemented), not error.
+	s := newAuthServer(pluginrt.Config{
+		WHMCSServerURL: "https://x", ClientID: "c", ClientSecret: "s",
+	})
+	_, err := s.RefreshSession(context.Background(), &pluginv1.RefreshSessionRequest{
+		ExternalSubject: "42",
+		RefreshState:    mustStruct(t, map[string]any{}),
+	})
 	if status.Code(err) != codes.Unimplemented {
-		t.Errorf("err = %v", err)
+		t.Errorf("code = %v, want Unimplemented; err = %v", status.Code(err), err)
+	}
+}
+
+func TestRefreshSession_HappyPath_UsesRefreshTokenAndReturnsIdentity(t *testing.T) {
+	var sawGrant, sawRefreshToken string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/oauth/token.php":
+			_ = r.ParseForm()
+			sawGrant = r.Form.Get("grant_type")
+			sawRefreshToken = r.Form.Get("refresh_token")
+			// Rotate the refresh token to exercise the carry-forward path.
+			_, _ = w.Write([]byte(`{"access_token":"AT2","refresh_token":"RT2","token_type":"Bearer","expires_in":3600}`))
+		case "/oauth/userinfo.php":
+			_, _ = w.Write([]byte(`{"id":"42","email":"u@x.com","name":"User"}`))
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+
+	s := newAuthServer(pluginrt.Config{
+		WHMCSServerURL: srv.URL, ClientID: "c1", ClientSecret: "s",
+	})
+	resp, err := s.RefreshSession(context.Background(), &pluginv1.RefreshSessionRequest{
+		ExternalSubject: "42",
+		RefreshState:    mustStruct(t, map[string]any{"whmcs_refresh_token": "RT1"}),
+	})
+	if err != nil {
+		t.Fatalf("RefreshSession: %v", err)
+	}
+	if sawGrant != "refresh_token" {
+		t.Errorf("grant_type = %q, want refresh_token", sawGrant)
+	}
+	if sawRefreshToken != "RT1" {
+		t.Errorf("refresh_token sent = %q, want RT1", sawRefreshToken)
+	}
+	if resp.GetExternalSubject() != "42" || resp.GetEmail() != "u@x.com" {
+		t.Errorf("resp = %+v", resp)
+	}
+	// The rotated refresh_token should be carried back in the claims.
+	if got, _ := resp.GetClaims().AsMap()["whmcs_refresh_token"].(string); got != "RT2" {
+		t.Errorf("carried refresh_token = %q, want RT2", got)
+	}
+}
+
+func TestRefreshSession_UpstreamErrorIsUnauthenticated(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth/token.php" {
+			w.WriteHeader(400)
+			_, _ = w.Write([]byte(`{"error":"invalid_grant"}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	s := newAuthServer(pluginrt.Config{
+		WHMCSServerURL: srv.URL, ClientID: "c1", ClientSecret: "s",
+	})
+	_, err := s.RefreshSession(context.Background(), &pluginv1.RefreshSessionRequest{
+		ExternalSubject: "42",
+		RefreshState:    mustStruct(t, map[string]any{"whmcs_refresh_token": "RT1"}),
+	})
+	if status.Code(err) != codes.Unauthenticated {
+		t.Errorf("code = %v, want Unauthenticated; err = %v", status.Code(err), err)
+	}
+}
+
+func TestExchangeCode_CarriesRefreshTokenClaim(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/oauth/token.php":
+			_, _ = w.Write([]byte(`{"access_token":"AT","refresh_token":"RT1","token_type":"Bearer","expires_in":3600}`))
+		case "/oauth/userinfo.php":
+			_, _ = w.Write([]byte(`{"id":"42","email":"u@x.com","name":"User"}`))
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+
+	s := newAuthServer(pluginrt.Config{
+		WHMCSServerURL: srv.URL, ClientID: "c1", ClientSecret: "s",
+	})
+	resp, err := s.ExchangeCode(context.Background(), &pluginv1.ExchangeCodeRequest{
+		Code:          "auth-code",
+		State:         "state-1",
+		RedirectUri:   "https://app.example/cb",
+		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v", "state": "state-1"}),
+	})
+	if err != nil {
+		t.Fatalf("ExchangeCode: %v", err)
+	}
+	if got, _ := resp.GetClaims().AsMap()["whmcs_refresh_token"].(string); got != "RT1" {
+		t.Errorf("refresh_token claim = %q, want RT1", got)
 	}
 }

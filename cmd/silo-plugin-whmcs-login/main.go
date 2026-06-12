@@ -42,6 +42,23 @@ var staticAssets embed.FS
 // Admins can force a refresh from the SPA via the products/refresh endpoint.
 const productCacheTTL = 5 * time.Minute
 
+// negativeLookupTTL is how long the entitlement resolver remembers a "no client
+// / no products" answer so a login storm against an unknown email can't fan out
+// unbounded admin API calls.
+const negativeLookupTTL = 30 * time.Second
+
+// entitlementClient pairs the shared, coalescing/negative-caching resolver
+// (email->client, client->products) with the underlying APIClient for the
+// uncoalesced GetClientsDetails pass-through. It satisfies auth.EntitlementAPI.
+type entitlementClient struct {
+	*whmcs.EntitlementResolver
+	api *whmcs.APIClient
+}
+
+func (e entitlementClient) GetClientsDetails(ctx context.Context, clientID string) (whmcs.ClientDetails, error) {
+	return e.api.GetClientsDetails(ctx, clientID)
+}
+
 func main() {
 	logger := hclog.New(&hclog.LoggerOptions{Name: "silo-plugin-whmcs-login"})
 	whmcs.SetLogger(logger.Named("whmcs"))
@@ -60,6 +77,7 @@ func main() {
 	var poolPtr atomic.Pointer[pgxpool.Pool]
 	var storePtr atomic.Pointer[store.Store]
 	var cachePtr atomic.Pointer[whmcs.ProductCache]
+	var resolverPtr atomic.Pointer[entitlementClient]
 	cfgFn := func() pluginrt.Config {
 		if p := cfgPtr.Load(); p != nil {
 			return *p
@@ -68,15 +86,29 @@ func main() {
 	}
 
 	authSrv := pluginauth.NewServer(cfgFn, logger.Named("auth"))
+	// Reuse the process-wide coalescing/negative-caching resolver across logins
+	// so a login storm collapses duplicate admin lookups instead of fanning out.
+	authSrv.SetAPIFn(func(_ pluginrt.Config) pluginauth.EntitlementAPI {
+		if r := resolverPtr.Load(); r != nil {
+			return *r
+		}
+		return nil
+	})
 
 	applyConfig := func(cfg pluginrt.Config) (*whmcs.ProductCache, error) {
 		cfgPtr.Store(&cfg)
 		var prodCache *whmcs.ProductCache
+		var resolver *entitlementClient
 		if cfg.WHMCSAdminAPIID != "" && cfg.WHMCSAdminAPISecret != "" {
 			apiClient := whmcs.NewAPIClient(cfg.WHMCSServerURL, cfg.WHMCSAdminAPIID, cfg.WHMCSAdminAPISecret)
 			prodCache = whmcs.NewProductCache(apiClient, productCacheTTL)
+			resolver = &entitlementClient{
+				EntitlementResolver: whmcs.NewEntitlementResolver(apiClient, negativeLookupTTL),
+				api:                 apiClient,
+			}
 		}
 		cachePtr.Store(prodCache)
+		resolverPtr.Store(resolver)
 		logger.Info("configured",
 			"whmcs_server_url", cfg.WHMCSServerURL,
 			"admin_api_configured", prodCache != nil)
@@ -135,6 +167,7 @@ func main() {
 				}
 				return whmcs.NewAPIClient(c.WHMCSServerURL, c.WHMCSAdminAPIID, c.WHMCSAdminAPISecret)
 			},
+			Logger: logger.Named("admin"),
 		})
 
 		srv := server.New(server.Deps{
