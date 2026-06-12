@@ -30,7 +30,7 @@ Standalone Silo auth provider. Requires:
 - A Postgres database reachable from the plugin runtime, with a dedicated `whmcs_login` schema for the plugin's owned tables (config storage and migrations).
 - Optional: WHMCS admin API credentials, needed only when you want product gating or Discord ID enrichment.
 
-Host: [`ContinuumApp/silo`](https://github.com/ContinuumApp/silo). SDK: [`ContinuumApp/continuum-plugin-sdk`](https://github.com/ContinuumApp/continuum-plugin-sdk).
+Host: [`Silo-Server/silo-server`](https://github.com/Silo-Server/silo-server). SDK: [`Silo-Server/silo-plugin-sdk`](https://github.com/Silo-Server/silo-plugin-sdk).
 
 ## External services
 
