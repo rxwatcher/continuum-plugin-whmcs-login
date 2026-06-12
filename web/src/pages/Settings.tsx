@@ -23,12 +23,12 @@ type ConfigSummary = {
   fetch_discord_id: boolean;
   discord_id_custom_field: string;
   claim_role_mapping: ClaimRoleMap[] | null;
+  link_by_email: boolean;
 };
 
-type FormState = Partial<ConfigSummary> & {
-  client_secret?: string;
-  whmcs_admin_api_secret?: string;
-};
+// Secrets (client secret, admin API secret) are host-managed: stored encrypted
+// by the host and injected at runtime, so they are NOT editable here.
+type FormState = Partial<ConfigSummary>;
 
 export default function Settings() {
   const qc = useQueryClient();
@@ -57,6 +57,7 @@ export default function Settings() {
         whmcs_admin_api_id: cfgQ.data.whmcs_admin_api_id,
         fetch_discord_id: cfgQ.data.fetch_discord_id,
         discord_id_custom_field: cfgQ.data.discord_id_custom_field,
+        link_by_email: cfgQ.data.link_by_email,
       });
       setRoleMappingJSON(JSON.stringify(cfgQ.data.claim_role_mapping ?? [], null, 2));
     }
@@ -69,12 +70,11 @@ export default function Settings() {
       if (form.whmcs_server_url !== undefined) body.whmcs_server_url = form.whmcs_server_url;
       if (form.client_id !== undefined) body.client_id = form.client_id;
       if (form.icon_url_path !== undefined) body.icon_url_path = form.icon_url_path;
-      if (form.client_secret) body.client_secret = form.client_secret;
       if (form.whmcs_admin_api_id !== undefined) body.whmcs_admin_api_id = form.whmcs_admin_api_id;
-      if (form.whmcs_admin_api_secret) body.whmcs_admin_api_secret = form.whmcs_admin_api_secret;
       if (form.fetch_discord_id !== undefined) body.fetch_discord_id = form.fetch_discord_id;
       if (form.discord_id_custom_field !== undefined)
         body.discord_id_custom_field = form.discord_id_custom_field;
+      if (form.link_by_email !== undefined) body.link_by_email = form.link_by_email;
 
       let parsedMapping: ClaimRoleMap[];
       try {
@@ -103,7 +103,6 @@ export default function Settings() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["config-summary"] });
       toast.success("Saved");
-      setForm((f) => ({ ...f, client_secret: "", whmcs_admin_api_secret: "" }));
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -159,12 +158,7 @@ export default function Settings() {
           </p>
         </Field>
         <Field label="OAuth client secret">
-          <Input
-            type="password"
-            placeholder={cfgQ.data?.has_client_secret ? "(unchanged)" : "enter secret"}
-            value={form.client_secret ?? ""}
-            onChange={(e) => setForm((f) => ({ ...f, client_secret: e.target.value }))}
-          />
+          <HostManagedSecret configured={!!cfgQ.data?.has_client_secret} />
         </Field>
       </Section>
 
@@ -181,16 +175,7 @@ export default function Settings() {
           />
         </Field>
         <Field label="API secret">
-          <Input
-            type="password"
-            placeholder={
-              cfgQ.data?.has_whmcs_admin_api_secret ? "(unchanged)" : "enter secret"
-            }
-            value={form.whmcs_admin_api_secret ?? ""}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, whmcs_admin_api_secret: e.target.value }))
-            }
-          />
+          <HostManagedSecret configured={!!cfgQ.data?.has_whmcs_admin_api_secret} />
         </Field>
       </Section>
 
@@ -213,6 +198,25 @@ export default function Settings() {
               setForm((f) => ({ ...f, discord_id_custom_field: e.target.value }))
             }
           />
+        </Field>
+      </Section>
+
+      <Section
+        title="Account linking"
+        description="Controls whether the host may link a WHMCS sign-in to an existing Silo account that shares the same email."
+      >
+        <Field label="">
+          <label className="inline-flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={!!form.link_by_email}
+              onCheckedChange={(v) => setForm((f) => ({ ...f, link_by_email: !!v }))}
+            />
+            <span>Allow linking to an existing account by email (unverified)</span>
+          </label>
+          <p className="text-muted-foreground text-xs">
+            Off by default. Linking on an unverified email is an account-takeover
+            vector; enable only if you trust your WHMCS email verification.
+          </p>
         </Field>
       </Section>
 
@@ -258,6 +262,24 @@ function Section({
       </div>
       {children}
     </section>
+  );
+}
+
+// HostManagedSecret renders a read-only indicator for a secret the host owns.
+// These secrets are declared in the plugin manifest's global_config_schema with
+// secret: true, stored encrypted by the host, and injected at runtime — they
+// are configured in the host's plugin settings, not here.
+function HostManagedSecret({ configured }: { configured: boolean }) {
+  return (
+    <div className="space-y-1">
+      <div className="text-sm">
+        {configured ? "Configured (host-managed)" : "Not configured"}
+      </div>
+      <p className="text-muted-foreground text-xs">
+        Managed by the host: stored encrypted and injected at runtime. Set or
+        change it from the plugin's settings in the Silo host admin.
+      </p>
+    </div>
   );
 }
 

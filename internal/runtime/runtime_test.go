@@ -111,6 +111,30 @@ func TestLoadConfig_RejectsInvalidServerURL(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_RejectsInternalLiteralIPs(t *testing.T) {
+	// SSRF defense: a literal internal/private/link-local/unspecified IP must be
+	// rejected outright (https or not). Loopback is the localhost exception and
+	// is covered separately.
+	cases := map[string]string{
+		"rfc1918 10":       "https://10.0.0.5",
+		"rfc1918 192.168":  "https://192.168.1.1",
+		"rfc1918 172.16":   "https://172.16.0.1",
+		"link-local":       "https://169.254.169.254",
+		"unspecified":      "https://0.0.0.0",
+		"ipv6 ula":         "https://[fd00::1]",
+		"ipv6 link-local":  "https://[fe80::1]",
+		"ipv6 unspecified": "https://[::]",
+	}
+	for name, raw := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := loadConfig([]*pluginv1.ConfigEntry{entry(t, "whmcs_server_url", raw)})
+			if err == nil {
+				t.Fatalf("expected SSRF rejection for %q", raw)
+			}
+		})
+	}
+}
+
 func TestLoadConfig_AllowsHTTPOnlyForLocalhost(t *testing.T) {
 	cfg, err := loadConfig([]*pluginv1.ConfigEntry{entry(t, "whmcs_server_url", "http://localhost:8080")})
 	if err != nil {

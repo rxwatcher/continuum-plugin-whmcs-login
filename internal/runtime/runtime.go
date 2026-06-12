@@ -38,6 +38,11 @@ type Config struct {
 	FetchDiscordID       bool
 	DiscordIDCustomField string
 	ClaimRoleMapping     []ClaimRoleMap
+	// LinkByEmail, when true, tells the host it may link an authenticated WHMCS
+	// identity to an existing silo account that shares the same (unverified)
+	// email. Off by default — account linking on an unverified email is an
+	// account-takeover vector and must be an explicit admin opt-in.
+	LinkByEmail bool
 }
 
 // Server implements the plugin's Runtime service. Configure parses the
@@ -129,6 +134,8 @@ func loadConfig(entries []*pluginv1.ConfigEntry) (Config, error) {
 			cfg.WHMCSAdminAPISecret = stringFromMap(m)
 		case "fetch_discord_id":
 			cfg.FetchDiscordID = boolFromMap(m)
+		case "link_by_email":
+			cfg.LinkByEmail = boolFromMap(m)
 		case "discord_id_custom_field":
 			if s := stringFromMap(m); s != "" {
 				cfg.DiscordIDCustomField = s
@@ -181,10 +188,50 @@ func validateServerURL(raw string) error {
 	if u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 		return fmt.Errorf("whmcs_server_url must be an origin URL without credentials, query, or fragment")
 	}
-	if u.Scheme == "http" && !isLocalhost(u.Hostname()) {
+	host := u.Hostname()
+	if u.Scheme == "http" && !isLocalhost(host) {
 		return fmt.Errorf("whmcs_server_url must use https except for localhost")
 	}
+	// SSRF defense: a WHMCS upstream is an Internet-facing billing host, so it
+	// must not resolve to an internal address. The explicit localhost allowance
+	// above is the only intentional exception (for local dev). For every other
+	// host, resolve it and reject if any resolved IP is loopback, private
+	// (RFC1918), link-local, unique-local (ULA fc00::/7), or unspecified.
+	if isLocalhost(host) {
+		return nil
+	}
+	// A literal IP is always checkable. For a DNS name we attempt resolution
+	// and block on any internal answer; resolution failure is treated as
+	// non-fatal here (the host may not have DNS yet at configure time) — the
+	// request-time client still targets the configured origin. The hard block
+	// is reserved for hosts that positively resolve to an internal address.
+	if ip := net.ParseIP(host); ip != nil {
+		if isInternalIP(ip) {
+			return fmt.Errorf("whmcs_server_url must not point at an internal/private address")
+		}
+		return nil
+	}
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return nil
+	}
+	for _, ip := range ips {
+		if isInternalIP(ip) {
+			return fmt.Errorf("whmcs_server_url must not resolve to an internal/private address")
+		}
+	}
 	return nil
+}
+
+// isInternalIP reports whether ip is a non-routable / internal address that an
+// upstream WHMCS host must never resolve to.
+func isInternalIP(ip net.IP) bool {
+	if ip.IsLoopback() || ip.IsUnspecified() ||
+		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+		ip.IsPrivate() {
+		return true
+	}
+	return false
 }
 
 func isLocalhost(host string) bool {

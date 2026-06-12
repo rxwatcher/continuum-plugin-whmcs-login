@@ -67,21 +67,22 @@ Role mapping uses the same set of product IDs: each entry in `claim_role_mapping
 
 ## Configuration
 
-The plugin global config is persisted by the plugin itself (in its own schema) and edited from the admin SPA. The only host-managed value is the database connection string.
+Most of the plugin global config is persisted by the plugin itself (in its own schema) and edited from the admin SPA. Secrets are host-managed: `database_url`, `client_secret`, and `whmcs_admin_api_secret` are declared in the manifest `global_config_schema` with `secret: true`, stored encrypted by the host, and injected at runtime via `Configure`. They are never written to the plugin's own database and are configured from the host's plugin settings, not the plugin SPA.
 
-| Key | Required | Description |
-| --- | --- | --- |
-| `database_url` | yes | Postgres DSN for the dedicated `whmcs_login` schema. |
-| `whmcs_server_url` | yes | WHMCS base URL, no trailing slash. HTTPS required except for localhost. |
-| `client_id` | yes | WHMCS OAuth client ID. |
-| `client_secret` | yes | WHMCS OAuth client secret. |
-| `display_name` | no | Label shown on the Silo login button. |
-| `allowed_product_ids` | no | Comma-separated WHMCS product IDs. Empty allows any WHMCS account. |
-| `whmcs_admin_api_id` | conditional | Required for product gating and Discord ID lookup. |
-| `whmcs_admin_api_secret` | conditional | Required for product gating and Discord ID lookup. |
-| `fetch_discord_id` | no | If true, includes the configured custom field as a claim. |
-| `discord_id_custom_field` | no | WHMCS custom-field name. Defaults to `Discord ID`. |
-| `claim_role_mapping` | no | JSON array of `{product_id, role}` entries; `role` must be `user` or `admin`. |
+| Key | Required | Managed by | Description |
+| --- | --- | --- | --- |
+| `database_url` | yes | host (secret) | Postgres DSN for the dedicated `whmcs_login` schema. |
+| `whmcs_server_url` | yes | plugin | WHMCS base URL, no trailing slash. HTTPS required except for localhost; must not resolve to an internal/private address. |
+| `client_id` | yes | plugin | WHMCS OAuth client ID. |
+| `client_secret` | yes | host (secret) | WHMCS OAuth client secret. |
+| `display_name` | no | plugin | Label shown on the Silo login button. |
+| `allowed_product_ids` | no | plugin | Comma-separated WHMCS product IDs. Empty allows any WHMCS account. |
+| `whmcs_admin_api_id` | conditional | plugin | Required for product gating and Discord ID lookup. |
+| `whmcs_admin_api_secret` | conditional | host (secret) | Required for product gating and Discord ID lookup. |
+| `fetch_discord_id` | no | plugin | If true, includes the configured custom field as a claim. |
+| `discord_id_custom_field` | no | plugin | WHMCS custom-field name. Defaults to `Discord ID`. |
+| `link_by_email` | no | plugin | Off by default. When true, sets the `silo_link_by_email` claim so the host may link a sign-in to an existing account sharing the (unverified) email. Account-takeover risk — opt in only if you trust WHMCS email verification. |
+| `claim_role_mapping` | no | plugin | JSON array of `{product_id, role}` entries; `role` must be `user` or `admin`. |
 
 Example `claim_role_mapping`:
 

@@ -98,6 +98,83 @@ func TestExchangeCode_RejectsStateMismatch(t *testing.T) {
 	}
 }
 
+func TestExchangeCode_RejectsMissingState(t *testing.T) {
+	// Fail closed: provider_state without a state must be rejected even though a
+	// pkce_verifier is present. An empty expected state must never be treated as
+	// "skip the check".
+	s := newAuthServer(pluginrt.Config{
+		WHMCSServerURL: "https://x", ClientID: "c", ClientSecret: "s",
+	})
+	_, err := s.ExchangeCode(context.Background(), &pluginv1.ExchangeCodeRequest{
+		Code:        "x",
+		State:       "anything",
+		RedirectUri: "/cb",
+		ProviderState: mustStruct(t, map[string]any{
+			"pkce_verifier": "v",
+			// state intentionally omitted
+		}),
+	})
+	if status.Code(err) != codes.Unauthenticated {
+		t.Errorf("code = %v, want Unauthenticated; err = %v", status.Code(err), err)
+	}
+}
+
+func TestExchangeCode_LinkByEmail_DefaultOff(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/oauth/token.php":
+			_, _ = w.Write([]byte(`{"access_token":"AT","id_token":"a.b.c"}`))
+		case "/oauth/userinfo.php":
+			_, _ = w.Write([]byte(`{"id":"42","email":"u@x.com","name":"User"}`))
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+
+	// Default config: LinkByEmail is false.
+	s := newAuthServer(pluginrt.Config{WHMCSServerURL: srv.URL, ClientID: "c", ClientSecret: "s"})
+	resp, err := s.ExchangeCode(context.Background(), &pluginv1.ExchangeCodeRequest{
+		Code: "x", State: "s", RedirectUri: "/cb",
+		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v", "state": "s"}),
+	})
+	if err != nil {
+		t.Fatalf("ExchangeCode: %v", err)
+	}
+	if _, present := resp.GetClaims().AsMap()["silo_link_by_email"]; present {
+		t.Error("silo_link_by_email must be absent when LinkByEmail is off")
+	}
+}
+
+func TestExchangeCode_LinkByEmail_OptIn(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/oauth/token.php":
+			_, _ = w.Write([]byte(`{"access_token":"AT","id_token":"a.b.c"}`))
+		case "/oauth/userinfo.php":
+			_, _ = w.Write([]byte(`{"id":"42","email":"u@x.com","name":"User"}`))
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+
+	s := newAuthServer(pluginrt.Config{
+		WHMCSServerURL: srv.URL, ClientID: "c", ClientSecret: "s",
+		LinkByEmail: true,
+	})
+	resp, err := s.ExchangeCode(context.Background(), &pluginv1.ExchangeCodeRequest{
+		Code: "x", State: "s", RedirectUri: "/cb",
+		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v", "state": "s"}),
+	})
+	if err != nil {
+		t.Fatalf("ExchangeCode: %v", err)
+	}
+	if resp.GetClaims().AsMap()["silo_link_by_email"] != true {
+		t.Error("silo_link_by_email must be true when LinkByEmail is on")
+	}
+}
+
 func TestExchangeCode_HappyPath_ReturnsAuthenticateResponse(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -121,7 +198,7 @@ func TestExchangeCode_HappyPath_ReturnsAuthenticateResponse(t *testing.T) {
 	}
 	s := newAuthServer(cfg)
 
-	pStateMap := map[string]any{"pkce_verifier": "verifier-x"}
+	pStateMap := map[string]any{"pkce_verifier": "verifier-x", "state": "state-1"}
 	resp, err := s.ExchangeCode(context.Background(), &pluginv1.ExchangeCodeRequest{
 		Code:          "auth-code",
 		State:         "state-1",
@@ -185,7 +262,7 @@ func TestExchangeCode_ProductGating_RejectsWhenNoMatchingProduct(t *testing.T) {
 
 	_, err := s.ExchangeCode(context.Background(), &pluginv1.ExchangeCodeRequest{
 		Code: "x", State: "s", RedirectUri: "/cb",
-		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v"}),
+		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v", "state": "s"}),
 	})
 	if err == nil {
 		t.Fatal("expected PermissionDenied")
@@ -225,7 +302,7 @@ func TestExchangeCode_ProductGating_AcceptsWhenMatching(t *testing.T) {
 
 	resp, err := s.ExchangeCode(context.Background(), &pluginv1.ExchangeCodeRequest{
 		Code: "x", State: "s", RedirectUri: "/cb",
-		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v"}),
+		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v", "state": "s"}),
 	})
 	if err != nil {
 		t.Fatalf("ExchangeCode: %v", err)
@@ -269,7 +346,7 @@ func TestExchangeCode_DiscordIDClaim_FetchedFromCustomField(t *testing.T) {
 
 	resp, err := s.ExchangeCode(context.Background(), &pluginv1.ExchangeCodeRequest{
 		Code: "x", State: "s", RedirectUri: "/cb",
-		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v"}),
+		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v", "state": "s"}),
 	})
 	if err != nil {
 		t.Fatalf("ExchangeCode: %v", err)
@@ -317,7 +394,7 @@ func TestExchangeCode_DiscordIDFailureIsNonFatal(t *testing.T) {
 
 	resp, err := s.ExchangeCode(context.Background(), &pluginv1.ExchangeCodeRequest{
 		Code: "x", State: "s", RedirectUri: "/cb",
-		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v"}),
+		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v", "state": "s"}),
 	})
 	if err != nil {
 		t.Fatalf("ExchangeCode should have succeeded despite details outage: %v", err)
@@ -328,15 +405,17 @@ func TestExchangeCode_DiscordIDFailureIsNonFatal(t *testing.T) {
 }
 
 func TestExchangeCode_EmailHasNoMatchingClient_Rejects(t *testing.T) {
-	// GetClients returns an empty clients envelope, which translates to a nil
-	// Client from GetClientByEmail. The plugin must reject this with
-	// PermissionDenied rather than auto-provisioning an unknown identity.
+	// userinfo carries no client id (only sub + email), so the plugin falls
+	// back to resolving the WHMCS client by email. GetClients returns an empty
+	// clients envelope, which translates to a nil Client. The plugin must reject
+	// this with PermissionDenied rather than auto-provisioning an unknown
+	// identity.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/oauth/token.php":
 			_, _ = w.Write([]byte(`{"access_token":"AT","id_token":"a.b.c"}`))
 		case "/oauth/userinfo.php":
-			_, _ = w.Write([]byte(`{"id":"42","email":"unknown@x.com","name":"User"}`))
+			_, _ = w.Write([]byte(`{"sub":"sub-42","id":"","email":"unknown@x.com","name":"User"}`))
 		case "/includes/api.php":
 			_ = r.ParseForm()
 			if r.Form.Get("action") == "GetClients" {
@@ -356,7 +435,7 @@ func TestExchangeCode_EmailHasNoMatchingClient_Rejects(t *testing.T) {
 
 	_, err := s.ExchangeCode(context.Background(), &pluginv1.ExchangeCodeRequest{
 		Code: "x", State: "s", RedirectUri: "/cb",
-		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v"}),
+		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v", "state": "s"}),
 	})
 	if status.Code(err) != codes.PermissionDenied {
 		t.Errorf("code = %v, want PermissionDenied; err = %v", status.Code(err), err)
@@ -394,7 +473,7 @@ func TestExchangeCode_ProductsLookupError_FailsLogin(t *testing.T) {
 
 	_, err := s.ExchangeCode(context.Background(), &pluginv1.ExchangeCodeRequest{
 		Code: "x", State: "s", RedirectUri: "/cb",
-		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v"}),
+		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v", "state": "s"}),
 	})
 	if err == nil {
 		t.Fatal("expected ExchangeCode to fail when products lookup errors")
@@ -434,7 +513,7 @@ func TestExchangeCode_RoleMapping_AdminAppliedFromOwnedProduct(t *testing.T) {
 
 	resp, err := s.ExchangeCode(context.Background(), &pluginv1.ExchangeCodeRequest{
 		Code: "x", State: "s", RedirectUri: "/cb",
-		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v"}),
+		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v", "state": "s"}),
 	})
 	if err != nil {
 		t.Fatalf("ExchangeCode: %v", err)
@@ -479,7 +558,7 @@ func TestExchangeCode_RoleMapping_IgnoresMalformedRoleEntries(t *testing.T) {
 
 	resp, err := s.ExchangeCode(context.Background(), &pluginv1.ExchangeCodeRequest{
 		Code: "x", State: "s", RedirectUri: "/cb",
-		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v"}),
+		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "v", "state": "s"}),
 	})
 	if err != nil {
 		t.Fatalf("ExchangeCode: %v", err)
@@ -540,7 +619,7 @@ func TestExchangeCode_CSRF_RejectsMismatchedPKCEVerifier(t *testing.T) {
 		Code:          "auth-code",
 		State:         "state-1",
 		RedirectUri:   "/cb",
-		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "wrong-verifier"}),
+		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": "wrong-verifier", "state": "state-1"}),
 	})
 	if err == nil {
 		t.Fatal("expected rejection when upstream rejects code_verifier")
@@ -580,7 +659,7 @@ func TestExchangeCode_CSRF_AcceptsValidPKCEVerifier(t *testing.T) {
 		Code:          "auth-code",
 		State:         "state-1",
 		RedirectUri:   "/cb",
-		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": verifier}),
+		ProviderState: mustStruct(t, map[string]any{"pkce_verifier": verifier, "state": "state-1"}),
 	})
 	if err != nil {
 		t.Fatalf("ExchangeCode: %v", err)

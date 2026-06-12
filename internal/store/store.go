@@ -60,7 +60,12 @@ func (s *Store) GetConfig(ctx context.Context) (pluginrt.Config, error) {
 }
 
 func (s *Store) UpdateConfig(ctx context.Context, cfg pluginrt.Config) error {
+	// Host-managed secrets (database_url, client_secret, whmcs_admin_api_secret)
+	// are delivered encrypted via Configure and must never be persisted in the
+	// plugin's own app_config JSONB. Strip them before marshalling.
 	cfg.DatabaseURL = ""
+	cfg.ClientSecret = ""
+	cfg.WHMCSAdminAPISecret = ""
 	if cfg.DiscordIDCustomField == "" {
 		cfg.DiscordIDCustomField = "Discord ID"
 	}
@@ -90,6 +95,8 @@ func (s *Store) ImportLegacyConfig(ctx context.Context, legacy pluginrt.Config) 
 		return current, nil
 	}
 	legacy.DatabaseURL = ""
+	legacy.ClientSecret = ""
+	legacy.WHMCSAdminAPISecret = ""
 	if legacy.DiscordIDCustomField == "" {
 		legacy.DiscordIDCustomField = "Discord ID"
 	}

@@ -154,8 +154,9 @@ func (s *Server) productCache() *whmcs.ProductCache {
 }
 
 // HandleConfigSummary returns a redacted projection of the live in-process
-// config. Secrets are NEVER returned in plaintext — admins re-enter them in
-// the form when changing.
+// config. Secrets are NEVER returned in plaintext; only has_* booleans signal
+// whether the host has injected them. The secrets themselves are host-managed
+// (global_config_schema, secret: true) and changed from the host admin UI.
 func (s *Server) HandleConfigSummary(w http.ResponseWriter, _ *http.Request) {
 	cfg := s.deps.ConfigFn()
 	intIDs := make([]int, 0, len(cfg.AllowedProductIDs))
@@ -176,6 +177,7 @@ func (s *Server) HandleConfigSummary(w http.ResponseWriter, _ *http.Request) {
 		"claim_role_mapping":         cfg.ClaimRoleMapping,
 		"fetch_discord_id":           cfg.FetchDiscordID,
 		"discord_id_custom_field":    cfg.DiscordIDCustomField,
+		"link_by_email":              cfg.LinkByEmail,
 	})
 }
 
@@ -185,18 +187,21 @@ func (s *Server) HandleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cur := s.deps.ConfigFn()
+	// NOTE: client_secret and whmcs_admin_api_secret are host-managed secrets
+	// (declared in global_config_schema with secret: true). They are stored
+	// encrypted by the host and injected via Configure, so they are NOT
+	// accepted or persisted through this admin endpoint.
 	var req struct {
 		WHMCSServerURL       *string                  `json:"whmcs_server_url"`
 		ClientID             *string                  `json:"client_id"`
-		ClientSecret         *string                  `json:"client_secret"`
 		DisplayName          *string                  `json:"display_name"`
 		IconURLPath          *string                  `json:"icon_url_path"`
 		AllowedProductIDs    *[]int                   `json:"allowed_product_ids"`
 		WHMCSAdminAPIID      *string                  `json:"whmcs_admin_api_id"`
-		WHMCSAdminAPISecret  *string                  `json:"whmcs_admin_api_secret"`
 		FetchDiscordID       *bool                    `json:"fetch_discord_id"`
 		DiscordIDCustomField *string                  `json:"discord_id_custom_field"`
 		ClaimRoleMapping     *[]pluginrt.ClaimRoleMap `json:"claim_role_mapping"`
+		LinkByEmail          *bool                    `json:"link_by_email"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid JSON body"})
@@ -207,9 +212,6 @@ func (s *Server) HandleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.ClientID != nil {
 		cur.ClientID = strings.TrimSpace(*req.ClientID)
-	}
-	if req.ClientSecret != nil && *req.ClientSecret != "" {
-		cur.ClientSecret = *req.ClientSecret
 	}
 	if req.DisplayName != nil {
 		cur.DisplayName = strings.TrimSpace(*req.DisplayName)
@@ -226,9 +228,6 @@ func (s *Server) HandleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	if req.WHMCSAdminAPIID != nil {
 		cur.WHMCSAdminAPIID = strings.TrimSpace(*req.WHMCSAdminAPIID)
 	}
-	if req.WHMCSAdminAPISecret != nil && *req.WHMCSAdminAPISecret != "" {
-		cur.WHMCSAdminAPISecret = *req.WHMCSAdminAPISecret
-	}
 	if req.FetchDiscordID != nil {
 		cur.FetchDiscordID = *req.FetchDiscordID
 	}
@@ -237,6 +236,9 @@ func (s *Server) HandleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.ClaimRoleMapping != nil {
 		cur.ClaimRoleMapping = *req.ClaimRoleMapping
+	}
+	if req.LinkByEmail != nil {
+		cur.LinkByEmail = *req.LinkByEmail
 	}
 	cur.DatabaseURL = ""
 	if err := s.deps.UpdateConfigFn(r.Context(), cur); err != nil {
@@ -435,11 +437,11 @@ func (s *Server) HandleSimulateLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := map[string]any{
-		"ok":         true,
-		"allowed":    gatePassed,
-		"role":       role,
-		"client_id":  clientID,
-		"products":   rows,
+		"ok":           true,
+		"allowed":      gatePassed,
+		"role":         role,
+		"client_id":    clientID,
+		"products":     rows,
 		"owned_active": ownedActive,
 		"gating": map[string]any{
 			"required":  len(allowed) > 0,

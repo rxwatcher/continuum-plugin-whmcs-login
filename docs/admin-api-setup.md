@@ -45,15 +45,18 @@ In WHMCS admin: Setup -> Staff Management -> Administrator Users.
 
 ## 3. Wire the credentials in the plugin
 
-In the admin SPA, fill `WHMCS admin API ID` and `WHMCS admin API secret`.
-Submitting the form triggers a re-Configure on the plugin process; the next
-admin API call will use the new credentials.
+Set `whmcs_admin_api_id` in the admin SPA (`WHMCS admin API ID`). The
+**API Secret** (`whmcs_admin_api_secret`) is host-managed: it is declared in
+the plugin manifest's `global_config_schema` with `secret: true`, so it is
+entered from the host's plugin settings, stored encrypted by the host, and
+injected into the plugin via `Configure`. It is never written to the plugin's
+own database. The same applies to the OAuth `client_secret`.
 
-The plugin only stores secrets when the SPA sends a non-empty value (see
-`HandleUpdateConfig` in `internal/admin/server.go`), so leaving the secret
-field blank when editing other fields keeps the existing secret. The SPA
-never reads secrets back: `config-summary` exposes only `has_client_secret`
-and `has_whmcs_admin_api_secret`.
+Setting or changing a secret in the host triggers a re-Configure on the plugin
+process; the next admin API call uses the new credentials. The plugin SPA never
+accepts or reads these secrets back — `config-summary` exposes only
+`has_client_secret` and `has_whmcs_admin_api_secret`, and the SPA renders them
+as read-only "host-managed" indicators.
 
 ## 4. Verify
 

@@ -27,7 +27,7 @@ between them. Use this with `internal/auth/server.go` and the SPA's
 | Symptom | Most likely cause | Fix |
 | --- | --- | --- |
 | WHMCS shows `invalid_redirect_uri` before consent | Redirect URI in WHMCS doesn't match Silo exactly | Re-check scheme, host, port, install ID. The install ID changes if you reinstall the plugin. |
-| WHMCS consent screen completes, Silo shows generic login error | Token exchange failed | Look in plugin log for `token exchange:` — WHMCS returns the reason verbatim. Common: wrong client secret, wrong allowed grant types, PKCE disabled on the client. |
+| WHMCS consent screen completes, Silo shows generic login error | Token exchange failed | The returned error is generic (`token endpoint returned status N`); the raw upstream body is logged server-side at debug level only (`token endpoint error`). Enable debug logging on the plugin to see the WHMCS reason. Common: wrong client secret, wrong allowed grant types, PKCE disabled on the client. |
 | Plugin log shows `state mismatch` | The `state` parameter didn't round-trip. Browser dropped a cookie, multiple tabs raced, or the install ID changed mid-flow | Have the user try again in a clean window. |
 | Plugin log shows `missing pkce_verifier in provider_state` | Silo host did not preserve `provider_state` across the redirect | Check Silo host version / configuration. The plugin places the verifier in `provider_state`; the host must round-trip it to the callback. |
 | Plugin log shows `userinfo response missing subject` | WHMCS returned a userinfo payload without `sub` or `id` | OAuth Identity Provider misconfigured on WHMCS — confirm scopes include `openid`. |

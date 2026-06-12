@@ -44,6 +44,7 @@ const productCacheTTL = 5 * time.Minute
 
 func main() {
 	logger := hclog.New(&hclog.LoggerOptions{Name: "silo-plugin-whmcs-login"})
+	whmcs.SetLogger(logger.Named("whmcs"))
 
 	manifest, err := loadManifest()
 	if err != nil {
@@ -66,7 +67,7 @@ func main() {
 		return pluginrt.Config{}
 	}
 
-	authSrv := pluginauth.NewServer(cfgFn)
+	authSrv := pluginauth.NewServer(cfgFn, logger.Named("auth"))
 
 	applyConfig := func(cfg pluginrt.Config) (*whmcs.ProductCache, error) {
 		cfgPtr.Store(&cfg)

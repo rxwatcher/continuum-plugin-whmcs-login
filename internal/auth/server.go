@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hashicorp/go-hclog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -29,10 +30,18 @@ type ConfigFn func() pluginrt.Config
 type Server struct {
 	pluginv1.UnimplementedAuthProviderServer
 	cfgFn ConfigFn
+	log   hclog.Logger
 }
 
-func NewServer(cfgFn ConfigFn) *Server {
-	return &Server{cfgFn: cfgFn}
+// NewServer builds the auth provider server. An optional logger may be passed;
+// when omitted, a no-op logger is used so tests can construct the server
+// without wiring logging.
+func NewServer(cfgFn ConfigFn, log ...hclog.Logger) *Server {
+	l := hclog.NewNullLogger()
+	if len(log) > 0 && log[0] != nil {
+		l = log[0]
+	}
+	return &Server{cfgFn: cfgFn, log: l}
 }
 
 // Authenticate (password) is not supported — manifest declares oauth2 only.
@@ -96,7 +105,13 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 	if verifier == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing pkce_verifier in provider_state")
 	}
-	if expectedState != "" && subtle.ConstantTimeCompare([]byte(req.GetState()), []byte(expectedState)) != 1 {
+	// Fail closed: the state round-tripped via provider_state is the CSRF bind
+	// for the OAuth callback. A missing expected state (provider_state lost the
+	// value) or a mismatch must reject — never skip the comparison.
+	if expectedState == "" {
+		return nil, status.Error(codes.Unauthenticated, "missing state in provider_state")
+	}
+	if subtle.ConstantTimeCompare([]byte(req.GetState()), []byte(expectedState)) != 1 {
 		return nil, status.Error(codes.Unauthenticated, "state mismatch")
 	}
 
@@ -127,7 +142,11 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 			"given_name":  ui.GivenName,
 			"family_name": ui.FamilyName,
 		},
-		"silo_link_by_email": true,
+	}
+	// Account linking by (unverified) email is an account-takeover vector, so it
+	// is gated behind an explicit admin opt-in (default off).
+	if cfg.LinkByEmail {
+		claims["silo_link_by_email"] = true
 	}
 
 	if len(cfg.AllowedProductIDs) > 0 || len(cfg.ClaimRoleMapping) > 0 || cfg.FetchDiscordID {
@@ -136,8 +155,15 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 				"admin API credentials required for product gating / Discord ID fetch")
 		}
 		api := whmcs.NewAPIClient(cfg.WHMCSServerURL, cfg.WHMCSAdminAPIID, cfg.WHMCSAdminAPISecret)
+		// Prefer the authenticated WHMCS client id from userinfo. Only fall back
+		// to an email lookup when userinfo did not carry an id — resolving the
+		// client by the unverified email is weaker and is the last resort.
 		clientID := ui.ID
-		if ui.Email != "" {
+		if clientID == "" {
+			if ui.Email == "" {
+				return nil, status.Error(codes.PermissionDenied,
+					"WHMCS userinfo carried neither client id nor email")
+			}
 			client, err := api.GetClientByEmail(ctx, ui.Email)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "fetch client by email: %v", err)
@@ -174,8 +200,12 @@ func (s *Server) ExchangeCode(ctx context.Context, req *pluginv1.ExchangeCodeReq
 				if id, ok := cd.CustomFields[cfg.DiscordIDCustomField]; ok && id != "" {
 					claims["discord_id"] = id
 				}
+			} else {
+				// Discord ID failure is non-fatal — login succeeds, claim is
+				// absent — but log it so a misconfigured custom field or upstream
+				// outage is diagnosable instead of silently swallowed.
+				s.log.Debug("discord id fetch failed", "client_id", clientID, "error", err)
 			}
-			// Discord ID failure is non-fatal — login succeeds, claim is absent.
 		}
 
 		if len(ownedActive) > 0 {
@@ -231,21 +261,19 @@ func AnyMatch(want, have []string) bool {
 	return false
 }
 
+// RoleFromProducts returns "admin" if any owned product maps to an admin role,
+// otherwise "user". Non-admin mappings ("user") and malformed roles never
+// elevate, so they need no separate handling.
 func RoleFromProducts(products []string, mappings []pluginrt.ClaimRoleMap) string {
-	role := "user"
 	for _, m := range mappings {
-		if m.Role != "admin" && m.Role != "user" {
+		if m.Role != "admin" {
 			continue
 		}
 		for _, p := range products {
-			if p != m.ProductID {
-				continue
-			}
-			if m.Role == "admin" {
+			if p == m.ProductID {
 				return "admin"
 			}
-			role = "user"
 		}
 	}
-	return role
+	return "user"
 }

@@ -65,11 +65,12 @@ In Silo admin -> Plugins -> WHMCS Login -> Install -> admin SPA at
 | --- | --- |
 | WHMCS server URL | The WHMCS base URL, no trailing slash, e.g. `https://billing.example.com`. The plugin trims trailing slashes; it appends `/oauth/authorize.php`, `/oauth/token.php`, `/oauth/userinfo.php`, and `/includes/api.php` itself. |
 | Client ID | From WHMCS. |
-| Client secret | From WHMCS. Write-only via the admin form — the SPA never displays it. |
+| Client secret | From WHMCS. Host-managed: set it from the host's plugin settings (manifest `global_config_schema`, `secret: true`). Stored encrypted by the host and injected at runtime; the plugin SPA shows only a read-only "host-managed" indicator. |
 | Display name | The label shown on the Silo login button. Optional. |
 
-The connection string (`database_url`) is set by the Silo host, not via
-the SPA. Point it at a Postgres role with create-table rights inside the
+The connection string (`database_url`) and the secrets (`client_secret`,
+`whmcs_admin_api_secret`) are host-managed, not edited via the plugin SPA. Point
+`database_url` at a Postgres role with create-table rights inside the
 `whmcs_login` schema only.
 
 ## 4. Smoke test

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -17,7 +16,6 @@ type APIClient struct {
 	serverURL string
 	apiID     string
 	apiSecret string
-	hc        *http.Client
 }
 
 func NewAPIClient(serverURL, apiID, apiSecret string) *APIClient {
@@ -25,7 +23,6 @@ func NewAPIClient(serverURL, apiID, apiSecret string) *APIClient {
 		serverURL: strings.TrimRight(serverURL, "/"),
 		apiID:     apiID,
 		apiSecret: apiSecret,
-		hc:        &http.Client{Timeout: httpTimeout},
 	}
 }
 
@@ -165,25 +162,17 @@ func (c *APIClient) post(ctx context.Context, action string, extra url.Values) (
 	for k, v := range extra {
 		form[k] = v
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		c.serverURL+"/includes/api.php",
-		strings.NewReader(form.Encode()))
+	statusCode, body, err := doForm(ctx, http.MethodPost,
+		c.serverURL+"/includes/api.php", "whmcs api", form, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Accept", "application/json")
-	resp, err := c.hc.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("whmcs api: %w", err)
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
-	if err != nil {
-		return nil, fmt.Errorf("whmcs api read body: %w", err)
-	}
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("whmcs api %d: %s", resp.StatusCode, string(body))
+	if statusCode >= 400 {
+		// Log raw upstream body server-side; surface only the status so the body
+		// (which may echo request params or internal detail) never reaches
+		// admin-facing JSON.
+		logger.Debug("whmcs api error", "action", action, "status", statusCode, "body", string(body))
+		return nil, fmt.Errorf("whmcs api returned status %d", statusCode)
 	}
 	// WHMCS always returns a JSON envelope with "result": "success" | "error".
 	var env struct {
@@ -191,7 +180,8 @@ func (c *APIClient) post(ctx context.Context, action string, extra url.Values) (
 		Message string `json:"message"`
 	}
 	if err := json.Unmarshal(body, &env); err != nil {
-		return nil, fmt.Errorf("decode whmcs envelope: %w (body: %s)", err, string(body))
+		logger.Debug("whmcs api envelope decode failed", "action", action, "body", string(body))
+		return nil, fmt.Errorf("decode whmcs envelope: %w", err)
 	}
 	if env.Result != "success" {
 		msg := env.Message

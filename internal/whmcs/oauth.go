@@ -15,6 +15,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/hashicorp/go-hclog"
 )
 
 // httpTimeout is the per-request timeout for upstream WHMCS calls.
@@ -26,6 +28,56 @@ const httpTimeout = 30 * time.Second
 // exhaustion if a misbehaving or hostile WHMCS instance streams a runaway
 // response.
 const maxResponseBytes = 10 << 20 // 10 MiB
+
+// sharedClient is the single http.Client used for all upstream WHMCS calls
+// (token, userinfo, admin API). Reusing one client lets the transport pool and
+// reuse TCP/TLS connections instead of allocating a fresh pool per login.
+var sharedClient = &http.Client{Timeout: httpTimeout}
+
+// logger receives server-side diagnostics for upstream failures. Raw upstream
+// response bodies are logged here (never returned in errors, which surface to
+// admin-facing JSON). Defaults to a null logger; main.go may override it.
+var logger hclog.Logger = hclog.NewNullLogger()
+
+// SetLogger installs the package logger used for upstream-failure diagnostics.
+func SetLogger(l hclog.Logger) {
+	if l != nil {
+		logger = l
+	}
+}
+
+// doForm issues a request to endpoint with the given method. When form is
+// non-nil it is sent url-encoded as the body (POST-style); headers are applied
+// last. The response body is read (bounded) and returned together with the
+// status code. Transport errors are wrapped with opName for context; HTTP
+// status interpretation is left to the caller.
+func doForm(ctx context.Context, method, endpoint, opName string, form url.Values, headers map[string]string) (status int, body []byte, err error) {
+	var bodyReader io.Reader
+	if form != nil {
+		bodyReader = strings.NewReader(form.Encode())
+	}
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, bodyReader)
+	if err != nil {
+		return 0, nil, err
+	}
+	if form != nil {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+	req.Header.Set("Accept", "application/json")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	resp, err := sharedClient.Do(req)
+	if err != nil {
+		return 0, nil, fmt.Errorf("%s: %w", opName, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	b, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+	if err != nil {
+		return resp.StatusCode, nil, fmt.Errorf("%s read body: %w", opName, err)
+	}
+	return resp.StatusCode, b, nil
+}
 
 // GeneratePKCE returns a 64-char URL-safe verifier + its S256 challenge.
 // The verifier conforms to RFC 7636 §4.1 (43..128 chars); the challenge is
@@ -105,25 +157,15 @@ func ExchangeCode(ctx context.Context, p ExchangeParams) (TokenResponse, error) 
 	form.Set("client_secret", p.ClientSecret)
 
 	endpoint := strings.TrimRight(p.ServerURL, "/") + "/oauth/token.php"
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(form.Encode()))
+	statusCode, body, err := doForm(ctx, http.MethodPost, endpoint, "token endpoint", form, nil)
 	if err != nil {
 		return TokenResponse{}, err
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Accept", "application/json")
-
-	hc := &http.Client{Timeout: httpTimeout}
-	resp, err := hc.Do(req)
-	if err != nil {
-		return TokenResponse{}, fmt.Errorf("token endpoint: %w", err)
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
-	if err != nil {
-		return TokenResponse{}, fmt.Errorf("token endpoint read body: %w", err)
-	}
-	if resp.StatusCode >= 400 {
-		return TokenResponse{}, fmt.Errorf("token endpoint %d: %s", resp.StatusCode, string(body))
+	if statusCode >= 400 {
+		// Log the raw upstream body server-side for debugging, but return a
+		// generic error so the response body never leaks into admin-facing JSON.
+		logger.Debug("token endpoint error", "status", statusCode, "body", string(body))
+		return TokenResponse{}, fmt.Errorf("token endpoint returned status %d", statusCode)
 	}
 	var tok TokenResponse
 	if err := json.Unmarshal(body, &tok); err != nil {
@@ -155,25 +197,16 @@ type UserInfo struct {
 // Authorization header.
 func FetchUserInfo(ctx context.Context, serverURL, accessToken string) (UserInfo, error) {
 	endpoint := strings.TrimRight(serverURL, "/") + "/oauth/userinfo.php"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	statusCode, body, err := doForm(ctx, http.MethodGet, endpoint, "userinfo endpoint", nil,
+		map[string]string{"Authorization": "Bearer " + accessToken})
 	if err != nil {
 		return UserInfo{}, err
 	}
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	req.Header.Set("Accept", "application/json")
-
-	hc := &http.Client{Timeout: httpTimeout}
-	resp, err := hc.Do(req)
-	if err != nil {
-		return UserInfo{}, fmt.Errorf("userinfo endpoint: %w", err)
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
-	if err != nil {
-		return UserInfo{}, fmt.Errorf("userinfo endpoint read body: %w", err)
-	}
-	if resp.StatusCode >= 400 {
-		return UserInfo{}, fmt.Errorf("userinfo endpoint %d: %s", resp.StatusCode, string(body))
+	if statusCode >= 400 {
+		// Log raw upstream body server-side; return a generic error so the body
+		// never reaches admin-facing JSON.
+		logger.Debug("userinfo endpoint error", "status", statusCode, "body", string(body))
+		return UserInfo{}, fmt.Errorf("userinfo endpoint returned status %d", statusCode)
 	}
 	var ui UserInfo
 	if err := json.Unmarshal(body, &ui); err != nil {
