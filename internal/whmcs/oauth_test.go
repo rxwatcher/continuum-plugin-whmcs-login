@@ -107,6 +107,82 @@ func TestBuildAuthorizeURL(t *testing.T) {
 	}
 }
 
+func TestRefreshAccessToken_PostsRefreshGrantAndDecodes(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/oauth/token.php" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		_ = r.ParseForm()
+		if r.Form.Get("grant_type") != "refresh_token" {
+			t.Errorf("grant_type = %q", r.Form.Get("grant_type"))
+		}
+		if r.Form.Get("refresh_token") != "RT1" {
+			t.Errorf("refresh_token = %q", r.Form.Get("refresh_token"))
+		}
+		if r.Form.Get("client_id") != "c" || r.Form.Get("client_secret") != "s" {
+			t.Errorf("client creds = %v", r.Form)
+		}
+		_, _ = w.Write([]byte(`{"access_token":"AT2","refresh_token":"RT2","token_type":"Bearer","expires_in":3600}`))
+	}))
+	defer srv.Close()
+
+	tok, err := whmcs.RefreshAccessToken(context.Background(), whmcs.RefreshParams{
+		ServerURL: srv.URL, ClientID: "c", ClientSecret: "s", RefreshToken: "RT1",
+	})
+	if err != nil {
+		t.Fatalf("RefreshAccessToken: %v", err)
+	}
+	if tok.AccessToken != "AT2" || tok.RefreshToken != "RT2" {
+		t.Errorf("tok = %+v", tok)
+	}
+}
+
+func TestRefreshAccessToken_RejectsMissingAccessToken(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"token_type":"Bearer","expires_in":3600}`))
+	}))
+	defer srv.Close()
+
+	_, err := whmcs.RefreshAccessToken(context.Background(), whmcs.RefreshParams{
+		ServerURL: srv.URL, ClientID: "c", ClientSecret: "s", RefreshToken: "RT1",
+	})
+	if err == nil || !strings.Contains(err.Error(), "access_token") {
+		t.Fatalf("expected missing access_token error, got %v", err)
+	}
+}
+
+func TestRefreshAccessToken_NonOKBubblesError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(400)
+		_, _ = w.Write([]byte(`{"error":"invalid_grant"}`))
+	}))
+	defer srv.Close()
+
+	_, err := whmcs.RefreshAccessToken(context.Background(), whmcs.RefreshParams{
+		ServerURL: srv.URL, ClientID: "c", ClientSecret: "s", RefreshToken: "RT1",
+	})
+	if err == nil || !strings.Contains(err.Error(), "400") {
+		t.Fatalf("expected 400 error, got %v", err)
+	}
+}
+
+func TestExchangeCode_TrimsRefreshToken(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"access_token":"AT","refresh_token":" RT1 ","token_type":"Bearer","expires_in":3600}`))
+	}))
+	defer srv.Close()
+
+	tok, err := whmcs.ExchangeCode(context.Background(), whmcs.ExchangeParams{
+		ServerURL: srv.URL, ClientID: "c", ClientSecret: "s", Code: "x", RedirectURI: "/cb", CodeVerifier: "v",
+	})
+	if err != nil {
+		t.Fatalf("ExchangeCode: %v", err)
+	}
+	if tok.RefreshToken != "RT1" {
+		t.Errorf("refresh_token = %q, want trimmed RT1", tok.RefreshToken)
+	}
+}
+
 func TestFetchUserInfo_RejectsMissingSubject(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"email":"u@x.com","name":"User"}`))

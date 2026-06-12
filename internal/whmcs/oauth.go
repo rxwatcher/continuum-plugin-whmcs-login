@@ -69,12 +69,15 @@ func doForm(ctx context.Context, method, endpoint, opName string, form url.Value
 	}
 	resp, err := sharedClient.Do(req)
 	if err != nil {
-		return 0, nil, fmt.Errorf("%s: %w", opName, err)
+		// Transport failures (DNS, connection refused, timeout) are transient;
+		// mark them retryable so idempotent admin GETs wrapped in retry() get a
+		// second chance instead of denying an entitled login on a single blip.
+		return 0, nil, markRetryable(fmt.Errorf("%s: %w", opName, err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	b, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
-		return resp.StatusCode, nil, fmt.Errorf("%s read body: %w", opName, err)
+		return resp.StatusCode, nil, markRetryable(fmt.Errorf("%s read body: %w", opName, err))
 	}
 	return resp.StatusCode, b, nil
 }
@@ -172,9 +175,54 @@ func ExchangeCode(ctx context.Context, p ExchangeParams) (TokenResponse, error) 
 		return TokenResponse{}, fmt.Errorf("decode token response: %w", err)
 	}
 	tok.AccessToken = strings.TrimSpace(tok.AccessToken)
+	tok.RefreshToken = strings.TrimSpace(tok.RefreshToken)
 	tok.TokenType = strings.TrimSpace(tok.TokenType)
 	if tok.AccessToken == "" {
 		return TokenResponse{}, fmt.Errorf("token response missing access_token")
+	}
+	if tok.TokenType != "" && !strings.EqualFold(tok.TokenType, "Bearer") {
+		return TokenResponse{}, fmt.Errorf("unsupported token_type %q", tok.TokenType)
+	}
+	return tok, nil
+}
+
+// RefreshParams describes the inputs for a refresh_token → token swap against
+// /oauth/token.php.
+type RefreshParams struct {
+	ServerURL    string
+	ClientID     string
+	ClientSecret string
+	RefreshToken string
+}
+
+// RefreshAccessToken POSTs grant_type=refresh_token to /oauth/token.php and
+// decodes the JSON response. WHMCS may (rotation) or may not return a new
+// refresh_token; when omitted the caller should keep reusing the previous one.
+func RefreshAccessToken(ctx context.Context, p RefreshParams) (TokenResponse, error) {
+	form := url.Values{}
+	form.Set("grant_type", "refresh_token")
+	form.Set("refresh_token", p.RefreshToken)
+	form.Set("client_id", p.ClientID)
+	form.Set("client_secret", p.ClientSecret)
+
+	endpoint := strings.TrimRight(p.ServerURL, "/") + "/oauth/token.php"
+	statusCode, body, err := doForm(ctx, http.MethodPost, endpoint, "refresh token endpoint", form, nil)
+	if err != nil {
+		return TokenResponse{}, err
+	}
+	if statusCode >= 400 {
+		logger.Debug("refresh token endpoint error", "status", statusCode, "body", string(body))
+		return TokenResponse{}, fmt.Errorf("refresh token endpoint returned status %d", statusCode)
+	}
+	var tok TokenResponse
+	if err := json.Unmarshal(body, &tok); err != nil {
+		return TokenResponse{}, fmt.Errorf("decode refresh token response: %w", err)
+	}
+	tok.AccessToken = strings.TrimSpace(tok.AccessToken)
+	tok.RefreshToken = strings.TrimSpace(tok.RefreshToken)
+	tok.TokenType = strings.TrimSpace(tok.TokenType)
+	if tok.AccessToken == "" {
+		return TokenResponse{}, fmt.Errorf("refresh token response missing access_token")
 	}
 	if tok.TokenType != "" && !strings.EqualFold(tok.TokenType, "Bearer") {
 		return TokenResponse{}, fmt.Errorf("unsupported token_type %q", tok.TokenType)

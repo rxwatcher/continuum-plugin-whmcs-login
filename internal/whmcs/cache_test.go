@@ -15,12 +15,19 @@ type fakeProductsFetcher struct {
 	calls int
 	out   []whmcs.Product
 	err   error
+	block chan struct{} // when non-nil, GetProducts blocks until closed
 }
 
 func (f *fakeProductsFetcher) GetProducts(_ context.Context) ([]whmcs.Product, error) {
 	f.mu.Lock()
-	defer f.mu.Unlock()
+	block := f.block
 	f.calls++
+	f.mu.Unlock()
+	if block != nil {
+		<-block
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	return f.out, f.err
 }
 
@@ -70,6 +77,31 @@ func TestProductCache_TTLExpiry(t *testing.T) {
 	}
 	if got := f.Calls(); got != 2 {
 		t.Errorf("calls = %d (expected refetch after TTL)", got)
+	}
+}
+
+func TestProductCache_Get_CoalescesConcurrentRefreshes(t *testing.T) {
+	// A burst of concurrent Get calls arriving after TTL expiry must collapse
+	// into a single upstream fetch (singleflight), not a thundering herd.
+	block := make(chan struct{})
+	f := &fakeProductsFetcher{out: []whmcs.Product{{PID: 1, Name: "A"}}, block: block}
+	c := whmcs.NewProductCache(f, time.Minute)
+
+	const n = 25
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func() {
+			defer wg.Done()
+			_, _ = c.Get(context.Background())
+		}()
+	}
+	time.Sleep(20 * time.Millisecond)
+	close(block)
+	wg.Wait()
+
+	if got := f.Calls(); got != 1 {
+		t.Errorf("upstream calls = %d, want 1 (singleflight should coalesce the herd)", got)
 	}
 }
 

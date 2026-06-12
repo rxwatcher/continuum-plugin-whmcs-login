@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 // ProductsFetcher is the subset of APIClient that ProductCache depends on.
@@ -28,6 +30,11 @@ type ProductCache struct {
 	at          time.Time // last successful fetch
 	lastAttempt time.Time // last attempted refresh (success or failure)
 	lastErr     string    // empty when the last attempt succeeded
+
+	// sf coalesces concurrent Get-triggered refreshes so a burst of reads
+	// arriving after TTL expiry collapses into a single upstream fetch instead
+	// of a thundering herd against WHMCS.
+	sf singleflight.Group
 }
 
 func NewProductCache(f ProductsFetcher, ttl time.Duration) *ProductCache {
@@ -44,7 +51,26 @@ func (c *ProductCache) Get(ctx context.Context) ([]Product, error) {
 		return out, nil
 	}
 	c.mu.RUnlock()
-	return c.Refresh(ctx)
+
+	// Coalesce concurrent post-expiry refreshes: only the first goroutine hits
+	// WHMCS; the rest wait and share its result (singleflight). After the
+	// leader returns we re-check the cache under the lock so a follower that
+	// raced in just before the leader populated it still gets fresh data
+	// rather than re-firing.
+	v, err, _ := c.sf.Do("get", func() (any, error) {
+		c.mu.RLock()
+		if !c.at.IsZero() && time.Since(c.at) < c.ttl {
+			out := c.products
+			c.mu.RUnlock()
+			return out, nil
+		}
+		c.mu.RUnlock()
+		return c.Refresh(ctx)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return v.([]Product), nil
 }
 
 // Refresh forces a re-fetch and updates the cache. Returns the new product

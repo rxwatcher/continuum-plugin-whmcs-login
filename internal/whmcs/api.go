@@ -172,7 +172,14 @@ func (c *APIClient) post(ctx context.Context, action string, extra url.Values) (
 		// (which may echo request params or internal detail) never reaches
 		// admin-facing JSON.
 		logger.Debug("whmcs api error", "action", action, "status", statusCode, "body", string(body))
-		return nil, fmt.Errorf("whmcs api returned status %d", statusCode)
+		err := fmt.Errorf("whmcs api returned status %d", statusCode)
+		// 5xx is transient (upstream overload / restart); mark it retryable so
+		// idempotent admin GETs wrapped in retry() can survive a single blip.
+		// 4xx is a permanent client error and must not be retried.
+		if statusCode >= 500 {
+			return nil, markRetryable(err)
+		}
+		return nil, err
 	}
 	// WHMCS always returns a JSON envelope with "result": "success" | "error".
 	var env struct {
@@ -218,6 +225,12 @@ func (c *APIClient) GetProducts(ctx context.Context) ([]Product, error) {
 // using GetClients(search=...) and a case-insensitive filter on the returned
 // rows.
 func (c *APIClient) GetClientByEmail(ctx context.Context, email string) (*Client, error) {
+	return retry(ctx, func(ctx context.Context) (*Client, error) {
+		return c.getClientByEmail(ctx, email)
+	})
+}
+
+func (c *APIClient) getClientByEmail(ctx context.Context, email string) (*Client, error) {
 	body, err := c.post(ctx, "GetClients", url.Values{
 		"search": {email},
 		"stats":  {"false"},
@@ -260,6 +273,12 @@ func (c *APIClient) GetClientByEmail(ctx context.Context, email string) (*Client
 
 // GetClientsProducts lists products owned by a specific WHMCS client.
 func (c *APIClient) GetClientsProducts(ctx context.Context, clientID string) ([]ClientProduct, error) {
+	return retry(ctx, func(ctx context.Context) ([]ClientProduct, error) {
+		return c.getClientsProducts(ctx, clientID)
+	})
+}
+
+func (c *APIClient) getClientsProducts(ctx context.Context, clientID string) ([]ClientProduct, error) {
 	body, err := c.post(ctx, "GetClientsProducts", url.Values{"clientid": {clientID}})
 	if err != nil {
 		return nil, err
@@ -328,6 +347,12 @@ func extractProductArray(body []byte) ([]rawProduct, error) {
 
 // GetClientsDetails returns the WHMCS client record + custom-field map.
 func (c *APIClient) GetClientsDetails(ctx context.Context, clientID string) (ClientDetails, error) {
+	return retry(ctx, func(ctx context.Context) (ClientDetails, error) {
+		return c.getClientsDetails(ctx, clientID)
+	})
+}
+
+func (c *APIClient) getClientsDetails(ctx context.Context, clientID string) (ClientDetails, error) {
 	body, err := c.post(ctx, "GetClientsDetails", url.Values{"clientid": {clientID}})
 	if err != nil {
 		return ClientDetails{}, err
