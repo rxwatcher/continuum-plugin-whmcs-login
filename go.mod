@@ -11,6 +11,7 @@ require (
 )
 
 require (
+	github.com/Silo-Server/silo-plugin-sdk v0.6.0 // indirect
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/hashicorp/go-plugin v1.8.0 // indirect
